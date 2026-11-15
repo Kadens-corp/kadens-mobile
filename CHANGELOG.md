@@ -11,6 +11,8 @@ la version taguée et s'en sert comme description de la GitHub Release. Un tag
 
 ## [Non publié]
 
+## [1.5.0] - 2026-11-15
+
 ### Ajouté
 
 - **La bande des jours glisse** : sur « Aujourd'hui », un geste vers la gauche
@@ -259,7 +261,8 @@ Première version publiée.
 - Bandeau de mise à jour signalant une version plus récente.
 - Chaîne de build : APK de release signé, publié en GitHub Release sur tag.
 
-[Non publié]: https://github.com/Kadens-corp/kadens-mobile/compare/v1.4.0...HEAD
+[Non publié]: https://github.com/Kadens-corp/kadens-mobile/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/Kadens-corp/kadens-mobile/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/Kadens-corp/kadens-mobile/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/Kadens-corp/kadens-mobile/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/Kadens-corp/kadens-mobile/compare/v1.2.0...v1.2.1
