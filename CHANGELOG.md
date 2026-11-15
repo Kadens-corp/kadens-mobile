@@ -243,15 +243,15 @@ Première version publiée.
 - Bandeau de mise à jour signalant une version plus récente.
 - Chaîne de build : APK de release signé, publié en GitHub Release sur tag.
 
-[Non publié]: https://github.com/CallMeTrinity/kadens-mobile/compare/v1.4.0...HEAD
-[1.4.0]: https://github.com/CallMeTrinity/kadens-mobile/compare/v1.3.0...v1.4.0
-[1.3.0]: https://github.com/CallMeTrinity/kadens-mobile/compare/v1.2.1...v1.3.0
-[1.2.1]: https://github.com/CallMeTrinity/kadens-mobile/compare/v1.2.0...v1.2.1
-[1.2.0]: https://github.com/CallMeTrinity/kadens-mobile/compare/v1.1.1...v1.2.0
-[1.1.1]: https://github.com/CallMeTrinity/kadens-mobile/compare/v1.1.0...v1.1.1
-[1.1.0]: https://github.com/CallMeTrinity/kadens-mobile/compare/v1.0.1...v1.1.0
-[1.0.1]: https://github.com/CallMeTrinity/kadens-mobile/compare/v1.0.0...v1.0.1
-[1.0.0]: https://github.com/CallMeTrinity/kadens-mobile/compare/v0.0.3...v1.0.0
-[0.0.3]: https://github.com/CallMeTrinity/kadens-mobile/compare/v0.0.2...v0.0.3
-[0.0.2]: https://github.com/CallMeTrinity/kadens-mobile/compare/v0.0.1...v0.0.2
-[0.0.1]: https://github.com/CallMeTrinity/kadens-mobile/releases/tag/v0.0.1
+[Non publié]: https://github.com/Kadens-corp/kadens-mobile/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/Kadens-corp/kadens-mobile/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/Kadens-corp/kadens-mobile/compare/v1.2.1...v1.3.0
+[1.2.1]: https://github.com/Kadens-corp/kadens-mobile/compare/v1.2.0...v1.2.1
+[1.2.0]: https://github.com/Kadens-corp/kadens-mobile/compare/v1.1.1...v1.2.0
+[1.1.1]: https://github.com/Kadens-corp/kadens-mobile/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/Kadens-corp/kadens-mobile/compare/v1.0.1...v1.1.0
+[1.0.1]: https://github.com/Kadens-corp/kadens-mobile/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/Kadens-corp/kadens-mobile/compare/v0.0.3...v1.0.0
+[0.0.3]: https://github.com/Kadens-corp/kadens-mobile/compare/v0.0.2...v0.0.3
+[0.0.2]: https://github.com/Kadens-corp/kadens-mobile/compare/v0.0.1...v0.0.2
+[0.0.1]: https://github.com/Kadens-corp/kadens-mobile/releases/tag/v0.0.1

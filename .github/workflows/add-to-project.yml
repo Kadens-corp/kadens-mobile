@@ -1,0 +1,27 @@
+name: Ajout au tableau
+
+# Envoie chaque nouvelle issue sur le tableau commun de l'orga
+# (https://github.com/orgs/Kadens-corp/projects/1), qui regroupe kadens et
+# kadens-mobile. L'auto-add intégré à Projects ne couvre qu'un seul dépôt sur le
+# plan Free : ce workflow, présent dans les deux dépôts, le remplace.
+#
+# Le GITHUB_TOKEN n'a pas accès aux projets d'une orga : il faut un PAT
+# fine-grained (Projects en écriture, Issues en lecture), stocké dans le secret
+# d'orga ADD_TO_PROJECT_PAT. Ajouter une issue déjà présente ne fait rien, d'où
+# `reopened` et `transferred` sans risque de doublon.
+on:
+  issues:
+    types: [opened, reopened, transferred]
+
+permissions: {}
+
+jobs:
+  add:
+    name: Ajouter au tableau
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/add-to-project@f2c1f1fa649a891be84948ea89b5dfba1526ef05 # v2.0.1
+        with:
+          project-url: https://github.com/orgs/Kadens-corp/projects/1
+          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}

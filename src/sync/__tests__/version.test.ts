@@ -26,7 +26,7 @@ const PAYLOAD = {
   versionName: '1.2.0',
   minimumVersionCode: 40,
   apkUrl:
-    'https://github.com/CallMeTrinity/kadens-mobile/releases/download/v1.2.0/kadens-1.2.0-42.apk',
+    'https://github.com/Kadens-corp/kadens-mobile/releases/download/v1.2.0/kadens-1.2.0-42.apk',
   storeUrl: 'https://store.antoninpamart.fr',
   installUrl: 'https://kadens.antoninpamart.fr/app',
 };
