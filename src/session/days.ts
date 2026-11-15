@@ -18,12 +18,25 @@
 import { localDate } from '@/db';
 
 /**
- * Combien de jours de part et d'autre. Le ticket dit J-2 → J+2 : deux jours
- * pour rattraper la veille et l'avant-veille, deux pour voir ce qui vient.
- * Au-delà, ce n'est plus « Aujourd'hui », c'est un calendrier — et le calendrier
- * reste sur le web.
+ * Combien de jours de part et d'autre d'aujourd'hui la bande montre **au repos**.
+ * Le ticket d'origine disait J-2 → J+2 : deux jours pour rattraper la veille et
+ * l'avant-veille, deux pour voir ce qui vient. C'est toujours ce qui s'affiche à
+ * l'ouverture, et c'est la largeur de la bande : cinq cases à l'écran.
+ *
+ * Ce n'est plus une limite. La bande glisse au-delà, jusqu'au bout de ce que le
+ * téléphone sait (`dayWindow`) : regarder la séance de jeudi prochain ne
+ * demandait pas d'ouvrir le web, seulement de pousser la bande du doigt.
  */
 export const DAY_REACH = 2;
+
+/** Le nombre de cases visibles à la fois : aujourd'hui, et `DAY_REACH` de chaque côté. */
+export const VISIBLE_DAYS = DAY_REACH * 2 + 1;
+
+/**
+ * Au-delà de cet écart, le nom du jour ne suffit plus à le situer : « mardi »
+ * peut être celui de cette semaine ou du suivant. Le titre passe alors à la date.
+ */
+const SAME_WEEK = 6;
 
 const WEEKDAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 
@@ -48,7 +61,7 @@ const MONTHS = [
 export interface DayCell {
   /** `AAAA-MM-JJ`, la clé de lecture en base. */
   date: string;
-  /** Écart en jours par rapport à aujourd'hui : -2 à +2. */
+  /** Écart en jours par rapport à aujourd'hui. Négatif avant, positif après. */
   offset: number;
   /** « lun », « mar »… Le composant met les capitales, pas la donnée. */
   weekday: string;
@@ -80,11 +93,35 @@ export function dayOffset(date: string, from: string): number {
   return Math.round((parse(date).getTime() - parse(from).getTime()) / millisecondsPerDay);
 }
 
-/** La bande de jours centrée sur `today`, de J-2 à J+2. */
-export function dayWindow(today: string): DayCell[] {
+/**
+ * La fenêtre de séances datées annoncée par le dernier pull, telle que
+ * `sync_state` la garde. Nulle tant qu'aucun pull n'a abouti.
+ */
+export interface SyncedWindow {
+  from: string | null;
+  to: string | null;
+}
+
+/**
+ * La bande de jours : ce que le téléphone sait, jamais moins que J-2 → J+2.
+ *
+ * **Elle s'arrête au bord de la fenêtre synchronisée**, et c'est le point.
+ * Dans la fenêtre, le pull fait autorité : un jour sans séance est vraiment un
+ * jour sans séance. Au-delà, le téléphone ne sait rien, et une case vide y
+ * dirait « rien de prévu » sur un jour que le coach a peut-être rempli. La
+ * fenêtre suit la date du dernier pull (J-30 → J+14 côté serveur) : un
+ * téléphone resté hors ligne une semaine voit donc moins loin devant lui, ce
+ * qui est exactement ce qu'il sait.
+ *
+ * J-2 → J+2 reste un plancher : c'est ce que l'écran a toujours montré, y
+ * compris avant le premier pull, et cinq cases remplissent la bande.
+ */
+export function dayWindow(today: string, synced: SyncedWindow | null = null): DayCell[] {
+  const first = Math.min(-DAY_REACH, synced?.from ? dayOffset(synced.from, today) : 0);
+  const last = Math.max(DAY_REACH, synced?.to ? dayOffset(synced.to, today) : 0);
   const cells: DayCell[] = [];
 
-  for (let offset = -DAY_REACH; offset <= DAY_REACH; offset += 1) {
+  for (let offset = first; offset <= last; offset += 1) {
     const date = shiftDate(today, offset);
     const at = parse(date);
 
@@ -103,22 +140,22 @@ export function dayWindow(today: string): DayCell[] {
  * Le titre de l'écran pour un jour donné.
  *
  * « Hier » et « Demain » plutôt qu'une date : c'est ce qu'on se dit en pensant à
- * la séance qu'on n'a pas faite. Au-delà, le jour de la semaine suffit — on ne
- * va jamais plus loin que deux jours.
+ * la séance qu'on n'a pas faite. Dans la semaine qui entoure aujourd'hui, le
+ * jour de la semaine suffit. Plus loin, il devient ambigu (lequel des deux
+ * mardis ?) et le titre prend la date.
  */
 export function dayTitle(date: string, today: string): string {
-  switch (dayOffset(date, today)) {
+  const offset = dayOffset(date, today);
+
+  switch (offset) {
     case 0:
       return "Aujourd'hui";
     case -1:
       return 'Hier';
     case 1:
       return 'Demain';
-    default: {
-      const at = parse(date);
-
-      return WEEKDAYS[at.getDay()];
-    }
+    default:
+      return Math.abs(offset) > SAME_WEEK ? shortDate(date) : WEEKDAYS[parse(date).getDay()];
   }
 }
 

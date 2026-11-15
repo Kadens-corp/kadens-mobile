@@ -11,6 +11,16 @@ la version taguée et s'en sert comme description de la GitHub Release. Un tag
 
 ## [Non publié]
 
+### Ajouté
+
+- **La bande des jours glisse** : sur « Aujourd'hui », un geste vers la gauche
+  découvre les jours qui viennent, vers la droite ceux d'avant, jusqu'au bout de
+  ce que le téléphone a synchronisé (deux semaines devant, un mois derrière). La
+  bande s'arrête toujours sur un jour entier, et la faire glisser ne change pas
+  le jour affiché. Un bouton calendrier apparaît dans l'en-tête dès qu'on s'est
+  éloigné, et ramène à aujourd'hui. Au-delà d'une semaine, le titre donne la
+  date (« 22 novembre ») plutôt qu'un nom de jour devenu ambigu.
+
 ### Corrigé
 
 - **Le record au poids du corps a enfin sa couronne** : pompes, tractions ou

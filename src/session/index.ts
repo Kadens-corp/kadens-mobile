@@ -110,8 +110,17 @@
 export { buildBodyLoad, EMPTY_BODY_LOAD } from './areas';
 export type { AreaLoad, BodyLoad, ExerciseAreaBook } from './areas';
 
-export { DAY_REACH, dayOffset, dayTitle, dayWindow, longDate, shiftDate, shortDate } from './days';
-export type { DayCell } from './days';
+export {
+  DAY_REACH,
+  dayOffset,
+  dayTitle,
+  dayWindow,
+  longDate,
+  shiftDate,
+  shortDate,
+  VISIBLE_DAYS,
+} from './days';
+export type { DayCell, SyncedWindow } from './days';
 
 export { closeWorkout } from './close';
 

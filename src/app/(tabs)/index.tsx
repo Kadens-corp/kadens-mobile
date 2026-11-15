@@ -1,6 +1,14 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  FlatList,
+  Pressable,
+  ScrollView,
+  Text,
+  useWindowDimensions,
+  View,
+  type ViewToken,
+} from 'react-native';
 
 import {
   Button,
@@ -9,6 +17,7 @@ import {
   EmptyState,
   Field,
   Header,
+  Icon,
   MessageSheet,
   prefetchMessageMedia,
   Sheet,
@@ -16,6 +25,7 @@ import {
 import {
   beginWorkout,
   createFreeWorkout,
+  DAY_REACH,
   dayOffset,
   dayTitle,
   defaultFreeTitle,
@@ -28,10 +38,12 @@ import {
   usePendingMessage,
   useRunningWorkout,
   useToday,
+  VISIBLE_DAYS,
   workoutStateLabel,
+  type DayCell,
   type DayWorkout,
 } from '@/session';
-import { layout, space, text, themed, useStyles } from '@/theme';
+import { layout, space, text, themed, useColors, useReducedMotion, useStyles } from '@/theme';
 
 /**
  * Écran « Aujourd'hui » (KL-28) — la porte d'entrée de l'app.
@@ -75,6 +87,11 @@ export default function TodayScreen() {
   const selected = shiftDate(today, offset);
   const [freeSheetOpen, setFreeSheetOpen] = useState(false);
   const [freeTitle, setFreeTitle] = useState('');
+  // La bande glisse sur plusieurs semaines : aujourd'hui peut sortir de l'écran
+  // sans que la sélection change. `recenter` est un ordre, pas un état — chaque
+  // incrément demande à la bande de ramener le jour choisi sous les yeux.
+  const [todayVisible, setTodayVisible] = useState(true);
+  const [recenter, setRecenter] = useState(0);
 
   const strip = useDayStrip(today);
   const workouts = useDayWorkouts(selected);
@@ -129,8 +146,13 @@ export default function TodayScreen() {
     // Toujours à la date du jour (`createFreeWorkout`) : on ramène donc
     // l'affichage sur aujourd'hui, sinon la séance qu'on vient de créer
     // n'apparaîtrait nulle part.
-    setOffset(0);
+    backToToday();
     router.push(`/session/${createFreeWorkout(freeTitle)}`);
+  }
+
+  function backToToday() {
+    setOffset(0);
+    setRecenter((count) => count + 1);
   }
 
   return (
@@ -138,9 +160,22 @@ export default function TodayScreen() {
       {/* Plus d'action « Réglages » ici depuis KL-37 : c'est une entrée de la
           barre basse. Le même chemin à deux endroits ferait douter qu'il mène au
           même écran — et celui-ci est au pouce. */}
-      <Header eyebrow={longDate(selected)} title={dayTitle(selected, today)} />
+      <Header
+        eyebrow={longDate(selected)}
+        title={dayTitle(selected, today)}
+        // Le chemin du retour n'apparaît que quand on s'est éloigné : par la
+        // sélection, ou en poussant la bande. Toujours là, il serait un bouton
+        // qui ne fait rien une fois sur deux.
+        right={offset !== 0 || !todayVisible ? <BackToToday onPress={backToToday} /> : null}
+      />
 
-      <DayStrip cells={strip} selected={selected} onSelect={setOffset} />
+      <DayStrip
+        cells={strip}
+        selected={selected}
+        recenter={recenter}
+        onSelect={setOffset}
+        onTodayVisible={setTodayVisible}
+      />
 
       <ScrollView contentContainerStyle={styles.page}>
         {runningElsewhere ? (
@@ -211,32 +246,145 @@ export default function TodayScreen() {
   );
 }
 
+type StripCell = DayCell & { total: number };
+
+/** Ce qui compte pour dire qu'un jour est « à l'écran » : plus de la moitié de sa case. */
+const VIEWABILITY = { itemVisiblePercentThreshold: 50 };
+
 /**
- * La bande des cinq jours, J-2 à J+2.
+ * La bande des jours : cinq à l'écran, et le reste à portée de doigt.
  *
  * Ce n'est pas un `Chip` : un `Chip` est une marque de lecture et ne se tape pas
  * (règle posée en KL-23). Un jour se choisit au doigt, il lui faut donc son
- * plancher tactile et son état sélectionné — c'est le « autre composant, avec son
- * plancher » que KL-23 annonçait.
+ * plancher tactile et son état sélectionné.
+ *
+ * ## Elle glisse, jour par jour
+ *
+ * À l'ouverture, elle montre J-2 → J+2, comme elle l'a toujours fait. Un geste
+ * vers la gauche découvre les jours qui viennent, vers la droite ceux d'avant,
+ * jusqu'au bord de la fenêtre synchronisée (`dayWindow`). La bande s'**aimante**
+ * sur une case : elle ne s'arrête jamais sur un jour coupé en deux, qu'on
+ * hésiterait à taper.
+ *
+ * **Faire glisser ne choisit rien.** Le jour choisi reste celui qu'on a tapé, et
+ * l'en-tête continue de le nommer. Une sélection qui suivrait le défilement
+ * changerait la liste des séances sous les yeux à chaque geste, pour un simple
+ * coup d'œil sur la semaine prochaine.
+ *
+ * **Elle ne bouge jamais sous le doigt.** Une case tapée est forcément visible :
+ * la bande n'a aucune raison de se recentrer dessus. Elle ne défile d'elle-même
+ * que si le jour choisi est hors de l'écran (le retour à aujourd'hui, dans
+ * l'en-tête), et ce mouvement s'efface sous « Supprimer les animations ».
  */
 function DayStrip({
   cells,
   selected,
+  recenter,
   onSelect,
+  onTodayVisible,
 }: {
-  cells: { date: string; offset: number; weekday: string; dayOfMonth: string; total: number }[];
+  cells: StripCell[];
   selected: string;
+  /** Incrémenté pour demander de ramener le jour choisi à l'écran. */
+  recenter: number;
   onSelect: (offset: number) => void;
+  onTodayVisible: (visible: boolean) => void;
+}) {
+  // Remontée quand la bande gagne des jours **avant** : un premier pull, ou le
+  // lendemain. Les index glissent alors tous d'autant, et une position de
+  // défilement gardée telle quelle montrerait d'autres jours. Repartir de
+  // J-2 → J+2 est le seul état dont on est sûr.
+  return (
+    <DayRail
+      key={cells[0].date}
+      cells={cells}
+      selected={selected}
+      recenter={recenter}
+      onSelect={onSelect}
+      onTodayVisible={onTodayVisible}
+    />
+  );
+}
+
+function DayRail({
+  cells,
+  selected,
+  recenter,
+  onSelect,
+  onTodayVisible,
+}: {
+  cells: StripCell[];
+  selected: string;
+  recenter: number;
+  onSelect: (offset: number) => void;
+  onTodayVisible: (visible: boolean) => void;
 }) {
   const styles = useStyles(sheets);
+  const reducedMotion = useReducedMotion();
+  const list = useRef<FlatList<StripCell>>(null);
+  // La bande est pleine largeur, en portrait seulement : la fenêtre suffit, et
+  // évite un premier rendu à largeur nulle le temps qu'un `onLayout` réponde.
+  const cellWidth = useWindowDimensions().width / VISIBLE_DAYS;
+  const lastStart = Math.max(0, cells.length - VISIBLE_DAYS);
+  const todayIndex = cells.findIndex((cell) => cell.offset === 0);
+  const initialIndex = clampIndex(todayIndex - DAY_REACH, lastStart);
+
+  // Les jours à l'écran, en dates et non en index : c'est ce que l'effet
+  // ci-dessous compare au jour choisi.
+  const shown = useRef({
+    first: cells[initialIndex].date,
+    last: cells[Math.min(cells.length - 1, initialIndex + VISIBLE_DAYS - 1)].date,
+  });
+
+  const onViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken<StripCell>[] }) => {
+      const dates = viewableItems.map((token) => token.item.date).sort();
+
+      if (dates.length === 0) {
+        return;
+      }
+
+      shown.current = { first: dates[0], last: dates[dates.length - 1] };
+      onTodayVisible(viewableItems.some((token) => token.item.offset === 0));
+    },
+    [onTodayVisible],
+  );
+
+  useEffect(() => {
+    const index = cells.findIndex((cell) => cell.date === selected);
+
+    if (index < 0 || (selected >= shown.current.first && selected <= shown.current.last)) {
+      return;
+    }
+
+    list.current?.scrollToIndex({
+      index: clampIndex(index - DAY_REACH, lastStart),
+      animated: !reducedMotion,
+    });
+    // `cells` reste hors des dépendances : un pull qui recompte les séances ne
+    // doit pas faire bouger la bande, seul un changement de choix le peut.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, recenter]);
+
   return (
-    <View style={styles.strip}>
-      {cells.map((cell) => {
+    <FlatList
+      ref={list}
+      horizontal
+      data={cells}
+      keyExtractor={(cell) => cell.date}
+      style={styles.strip}
+      showsHorizontalScrollIndicator={false}
+      initialScrollIndex={initialIndex}
+      getItemLayout={(_, index) => ({ length: cellWidth, offset: cellWidth * index, index })}
+      snapToInterval={cellWidth}
+      decelerationRate="fast"
+      viewabilityConfig={VIEWABILITY}
+      onViewableItemsChanged={onViewableItemsChanged}
+      renderItem={({ item: cell }) => {
         const active = cell.date === selected;
 
         return (
           <Pressable
-            key={cell.date}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             accessibilityLabel={`${cell.weekday} ${cell.dayOfMonth}`}
@@ -244,6 +392,7 @@ function DayStrip({
             onPress={() => onSelect(cell.offset)}
             style={({ pressed }) => [
               styles.day,
+              { width: cellWidth },
               active && styles.dayActive,
               pressed && !active && styles.dayPressed,
             ]}
@@ -263,8 +412,44 @@ function DayStrip({
             />
           </Pressable>
         );
-      })}
-    </View>
+      }}
+    />
+  );
+}
+
+function clampIndex(index: number, last: number): number {
+  return Math.min(last, Math.max(0, index));
+}
+
+/**
+ * Le retour à aujourd'hui, en icône.
+ *
+ * Un libellé « Aujourd'hui » à côté du titre « Aujourd'hui » (la bande poussée
+ * sans rien choisir) cassait le titre en deux, en plein mot. L'icône est celle
+ * de l'onglet « Aujourd'hui », juste en dessous : même dessin, même sens, et la
+ * barre d'onglets en donne la légende. TalkBack, lui, lit le libellé.
+ *
+ * **Il ne pousse rien en apparaissant.** Dessiné à la hauteur d'une ligne de
+ * titre (30), il ne grandit pas l'en-tête, et la bande ne descend pas sous le
+ * doigt qui vient de la pousser. Sa cible, elle, garde le plancher de 44 : le
+ * `hitSlop` l'étend sans prendre de place.
+ */
+const TODAY_SIZE = 30;
+const TODAY_SLOP = (layout.touchTarget - TODAY_SIZE) / 2;
+
+function BackToToday({ onPress }: { onPress: () => void }) {
+  const styles = useStyles(sheets);
+  const colors = useColors();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Revenir à aujourd’hui"
+      onPress={onPress}
+      hitSlop={TODAY_SLOP}
+      style={({ pressed }) => [styles.backToToday, pressed && styles.backToTodayPressed]}
+    >
+      <Icon name="calendar-days" size={18} color={colors.text} />
+    </Pressable>
   );
 }
 
@@ -442,7 +627,7 @@ function emptyTitle(selected: string, today: string): string {
     case 1:
       return 'Rien de prévu demain';
     default:
-      return 'Rien de prévu ce jour-là';
+      return selected < today ? 'Rien n’était prévu ce jour-là' : 'Rien de prévu ce jour-là';
   }
 }
 
@@ -460,14 +645,15 @@ const sheets = themed((c) => ({
   caption: { ...text.caption, color: c.textSecondary },
   body: { ...text.body, color: c.textSecondary },
 
+  // `flexGrow: 0` : une liste horizontale s'étire sinon sur toute la hauteur
+  // libre et repousse les séances sous la ligne de flottaison.
   strip: {
-    flexDirection: 'row',
+    flexGrow: 0,
     backgroundColor: c.surfaceRaised,
     borderBottomWidth: layout.hairline,
     borderBottomColor: c.border,
   },
   day: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: space[1],
@@ -476,6 +662,16 @@ const sheets = themed((c) => ({
     borderRightWidth: layout.hairline,
     borderRightColor: c.dividerSoft,
   },
+  backToToday: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: TODAY_SIZE,
+    height: TODAY_SIZE,
+    borderWidth: layout.hairline,
+    borderColor: c.border,
+    backgroundColor: c.surface,
+  },
+  backToTodayPressed: { backgroundColor: c.fill },
   // Le jour choisi s'inverse à l'encre, comme le bouton secondaire pressé : la
   // sélection se lit d'un coup d'œil sans introduire de teinte (règle 2).
   dayActive: { backgroundColor: c.surfaceInk },

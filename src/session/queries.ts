@@ -381,6 +381,22 @@ export function exerciseAreasQuery(exerciseIds: number[]) {
 }
 
 /**
+ * La fenêtre de séances datées du dernier pull : jusqu'où la bande de jours peut
+ * glisser (`dayWindow`).
+ *
+ * Même raison que `exerciseLanguageQuery` pour ne pas passer par
+ * `useSyncState()` : deux colonnes qui ne bougent qu'au pull, plutôt qu'une ligne
+ * entière qui se republie à chaque `lastPushedAt`.
+ */
+export function syncWindowQuery() {
+  return db
+    .select({ from: syncState.windowFrom, to: syncState.windowTo })
+    .from(syncState)
+    .where(eq(syncState.id, SYNC_STATE_ID))
+    .limit(1);
+}
+
+/**
  * La langue d'affichage des noms d'exercices, telle que le dernier bootstrap l'a
  * descendue.
  *

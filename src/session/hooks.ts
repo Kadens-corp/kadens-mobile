@@ -69,6 +69,7 @@ import {
   prescribedSnapshotQuery,
   runningWorkoutQuery,
   sessionLayoutQuery,
+  syncWindowQuery,
   toDayWorkout,
   workoutQuery,
   workoutsOfDayQuery,
@@ -384,12 +385,21 @@ export function usePreferences(): Omit<PreferenceRow, 'id'> {
   );
 }
 
-/** La bande de jours, chacun sachant s'il porte des séances. */
+/**
+ * La bande de jours, chacun sachant s'il porte des séances.
+ *
+ * Elle s'étend sur la fenêtre du dernier pull (`dayWindow`), relue en vif : le
+ * premier pull d'un téléphone fraîchement appairé allonge la bande sans qu'on
+ * ait à rouvrir l'écran.
+ */
 export function useDayStrip(today: string): (DayCell & { total: number })[] {
-  const cells = useMemo(() => dayWindow(today), [today]);
-  const from = cells[0].date;
-  const to = cells[cells.length - 1].date;
-  const { data: counts } = useLiveQuery(dayCountsQuery(from, to), [from, to]);
+  const { data: synced } = useLiveQuery(syncWindowQuery());
+  const from = synced[0]?.from ?? null;
+  const to = synced[0]?.to ?? null;
+  const cells = useMemo(() => dayWindow(today, { from, to }), [today, from, to]);
+  const first = cells[0].date;
+  const last = cells[cells.length - 1].date;
+  const { data: counts } = useLiveQuery(dayCountsQuery(first, last), [first, last]);
 
   return useMemo(() => {
     const totals = new Map(counts.map((row) => [row.date, row.total]));
