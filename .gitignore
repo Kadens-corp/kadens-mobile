@@ -47,4 +47,9 @@ yarn-error.*
 /ios
 /android
 
+# Sorties Gradle des modules natifs locaux (modules/) : le code source est
+# versionné, ce que Gradle en tire ne l'est pas.
+/modules/*/android/build/
+/modules/*/android/.cxx/
+
 .java-version

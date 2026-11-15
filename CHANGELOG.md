@@ -20,6 +20,12 @@ la version taguée et s'en sert comme description de la GitHub Release. Un tag
   le jour affiché. Un bouton calendrier apparaît dans l'en-tête dès qu'on s'est
   éloigné, et ramène à aujourd'hui. Au-delà d'une semaine, le titre donne la
   date (« 22 novembre ») plutôt qu'un nom de jour devenu ambigu.
+- **Le repos se suit hors de l'app** : téléphone verrouillé ou une autre app à
+  l'écran, le décompte du repos passe dans les notifications et défile tout
+  seul, avec ce qui vient ensuite (« À suivre : … »). Il ne sonne ni ne vibre.
+  Il disparaît au retour dans l'app, où la barre de repos reprend la main, et à
+  la fin du repos, où l'avertissement « Repos terminé » prend le relais. Un
+  appui dessus rouvre la séance là où on l'a laissée.
 
 ### Corrigé
 

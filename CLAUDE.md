@@ -68,6 +68,13 @@ native module fails as `Cannot find native module 'Expo...'` followed by a casca
 required default export" — nothing wrong in the code, just run `npm run android` again. After `npx expo install
 <module>`, always rebuild.
 
+Native **code** the app writes itself lives in `modules/` (local Expo modules, autolinked from there — no entry in
+`package.json` or `app.json`). There is one: `modules/rest-countdown`, a Kotlin module that posts the rest countdown
+as an ongoing notification with a system-driven `Chronometer`, because `expo-notifications` can only post a frozen
+text and the JS loop doesn't run in the background. Its JS face is `src/session/countdown.ts`, loaded with
+`requireOptionalNativeModule`: absent under Jest, on web, or in a dev client built before it, the rest timer just
+runs without it. Editing anything under `modules/` needs a rebuild, like adding a native dependency.
+
 ## Architecture
 
 ### One entry point per module — always import from the barrel
@@ -96,6 +103,7 @@ src/
   theme/        generated tokens, typography scale, fonts
   config.ts     env-derived configuration
 tools/          scripts that sync design tokens/fonts from the server repo
+modules/        local Expo modules (native code), see "Native modules" above
 ```
 
 `@/db` knows how to write rows; `@/api` knows how to talk to the server; neither knows what "starting a workout"

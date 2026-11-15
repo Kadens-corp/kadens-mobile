@@ -42,6 +42,19 @@
  * une bannière par-dessus serait du bruit. Décider nous-mêmes au moment de
  * l'échéance, en lisant `AppState`, supposerait que la boucle JS tourne encore à
  * cet instant précis : c'est justement ce qu'Android ne garantit pas.
+ *
+ * ## Hors de l'app, le décompte passe au système
+ *
+ * Téléphone verrouillé, ou une autre app à l'écran, la barre de repos n'est plus
+ * visible, et la boucle JS qui la fait défiler est suspendue. Le décompte part
+ * donc dans le volet, en notification persistante, au moment où l'app quitte
+ * l'écran — un instant où la boucle JS tourne encore, puisque c'est elle qui
+ * reçoit l'événement. Ce n'est pas une notification qu'on réécrit chaque
+ * seconde (on ne le pourrait pas) : c'est un `Chronometer` réglé une fois sur
+ * l'échéance, que le système fait défiler seul (`countdown.ts`,
+ * `modules/rest-countdown`). Elle disparaît d'elle-même à l'échéance, où
+ * l'avertissement « Repos terminé » prend le relais, et au retour dans l'app,
+ * où la barre reprend la main. Les deux ne se montrent jamais en même temps.
  */
 
 import * as Notifications from 'expo-notifications';
@@ -50,6 +63,7 @@ import { AppState, Platform, Vibration, type NativeEventSubscription } from 'rea
 
 import { getPreferences } from '@/db';
 
+import { hideRestCountdown, showRestCountdown } from './countdown';
 import type { SessionExercise } from './program';
 
 /** Le pas d'ajustement, en secondes. « + 15 s / - 15 s », mot pour mot du ticket. */
@@ -87,6 +101,15 @@ const VIBRATION_PATTERN = [0, 250, 150, 250];
 const CHANNEL_VIBRATE = 'rest';
 const CHANNEL_SILENT = 'rest-silent';
 
+/**
+ * Le canal du décompte en arrière-plan. Importance « par défaut » et non
+ * « basse » : une notification basse est rangée parmi les silencieuses, que bien
+ * des écrans de verrouillage masquent — or c'est là qu'on la cherche, entre deux
+ * séries. Elle ne sonne pas pour autant : le canal n'a ni son ni vibration, et
+ * la notification est postée silencieuse.
+ */
+const CHANNEL_COUNTDOWN = 'rest-countdown';
+
 /** Ce qui distingue une notification de repos des autres. Il n'y en a pas d'autres, pour l'instant. */
 const REST_NOTIFICATION_KIND = 'rest';
 
@@ -104,7 +127,7 @@ export interface RestState {
 
 let state: RestState | null = null;
 let ticker: ReturnType<typeof setInterval> | null = null;
-let foreground: NativeEventSubscription | null = null;
+let appState: NativeEventSubscription | null = null;
 
 const listeners = new Set<() => void>();
 
@@ -267,6 +290,7 @@ export function stopRest(): void {
   // `scheduleNotificationAsync` laissait sonner la fin d'un repos abandonné.
   epoch++;
   void cancelRestNotification();
+  hideRestCountdown();
   publish(null);
 }
 
@@ -277,13 +301,17 @@ function startTicking(): void {
     ticker = setInterval(tick, 1_000);
   }
 
-  if (foreground === null) {
-    // Le retour au premier plan est le seul moment où l'écart peut être grand :
-    // la boucle JS a été suspendue, le prochain tick naturel afficherait une
-    // valeur périmée pendant une seconde entière.
-    foreground = AppState.addEventListener('change', (next) => {
+  if (appState === null) {
+    appState = AppState.addEventListener('change', (next) => {
       if (next === 'active') {
+        // La barre reprend la main : le décompte du volet ferait doublon.
+        hideRestCountdown();
+        // Le retour au premier plan est le seul moment où l'écart peut être
+        // grand : la boucle JS a été suspendue, le prochain tick naturel
+        // afficherait une valeur périmée pendant une seconde entière.
         tick();
+      } else if (next === 'background') {
+        showCountdown();
       }
     });
   }
@@ -295,8 +323,28 @@ function stopTicking(): void {
     ticker = null;
   }
 
-  foreground?.remove();
-  foreground = null;
+  appState?.remove();
+  appState = null;
+}
+
+/**
+ * Confie le décompte au volet, si un repos court encore.
+ *
+ * Le texte suit l'avertissement de fin : ce qui vient après le repos, pas
+ * l'exercice d'où il vient (`upNext`, plus bas). Un repos déjà fini n'a rien à
+ * décompter — l'avertissement a sonné, ou va sonner.
+ */
+function showCountdown(): void {
+  if (state === null || remainingOf(state.endsAt) <= 0) {
+    return;
+  }
+
+  showRestCountdown({
+    endsAt: state.endsAt,
+    title: 'Repos',
+    body: upNext ? `À suivre : ${upNext}` : 'Plus rien à cocher',
+    channelId: CHANNEL_COUNTDOWN,
+  });
 }
 
 function tick(): void {
@@ -433,11 +481,26 @@ export async function initRestNotifications(): Promise<void> {
       importance: Notifications.AndroidImportance.HIGH,
       enableVibrate: false,
     });
+    await Notifications.setNotificationChannelAsync(CHANNEL_COUNTDOWN, {
+      name: 'Repos en cours',
+      description: 'Le décompte du repos, quand l’app n’est plus à l’écran.',
+      importance: Notifications.AndroidImportance.DEFAULT,
+      sound: null,
+      enableVibrate: false,
+      showBadge: false,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    });
   }
+
+  // Même logique que la purge ci-dessous : une app relancée n'a plus de repos,
+  // un décompte resté dans le volet compterait vers rien.
+  hideRestCountdown();
 
   // Tout, et pas seulement « la nôtre » : au démarrage il n'y a pas d'identifiant
   // en mémoire à annuler, et l'app ne programme rien d'autre que des fins de
-  // repos. Le jour où elle en programmera, ce balai devra se restreindre.
+  // repos (le décompte du volet n'est pas programmé, il est posté, et vient
+  // d'être retiré). Le jour où elle en programmera, ce balai devra se
+  // restreindre.
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();
   } catch {

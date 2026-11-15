@@ -1,0 +1,22 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'fr.antoninpamart.kadens'
+version = '1.0.0'
+
+android {
+  namespace "fr.antoninpamart.kadens.restcountdown"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
+
+dependencies {
+  // NotificationCompat et les styles de texte des notifications. Même version
+  // qu'expo-notifications : Gradle prendrait de toute façon la plus haute des
+  // deux, autant qu'elles ne divergent pas en silence.
+  implementation 'androidx.core:core:1.17.0'
+}

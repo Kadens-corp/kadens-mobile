@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Le corps de la notification de repos : ce qui suit à gauche, le décompte à
+  droite, en grand. Il est posé sous l'en-tête système (DecoratedCustomViewStyle),
+  qui garde l'icône et le nom de l'app.
+
+  Les apparences de texte sont celles des notifications (androidx.core) : elles
+  suivent le fond que le système peint, clair ou sombre. Une couleur écrite ici
+  serait juste sur l'un des deux et illisible sur l'autre.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/rest_countdown_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textAppearance="@style/TextAppearance.Compat.Notification.Title" />
+
+        <TextView
+            android:id="@+id/rest_countdown_body"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textAppearance="@style/TextAppearance.Compat.Notification" />
+    </LinearLayout>
+
+    <!-- Chiffres tabulaires : sans eux, le décompte se tortille à chaque
+         seconde, le « 1 » étant plus étroit que les autres. -->
+    <Chronometer
+        android:id="@+id/rest_countdown_clock"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:fontFeatureSettings="tnum"
+        android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
+        android:textSize="28sp" />
+</LinearLayout>
