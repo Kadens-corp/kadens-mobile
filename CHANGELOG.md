@@ -11,6 +11,15 @@ la version taguée et s'en sert comme description de la GitHub Release. Un tag
 
 ## [Non publié]
 
+### Ajouté
+
+- **La consigne du plan se lit sur le téléphone** : la note posée sur une case
+  du plan depuis le web (« descente lente en 3 s sur squat et fentes ») s'affiche
+  sous « Consigne du plan » avant de lancer la séance. Une fois la séance
+  commencée, elle reste dans la bande du haut, sur une ligne : un appui l'ouvre
+  en entier. Elle est enregistrée avec le reste du programme, donc lisible hors
+  ligne. Une consigne retouchée sur le web arrive à la synchronisation suivante.
+
 ## [1.5.0] - 2026-11-15
 
 ### Ajouté

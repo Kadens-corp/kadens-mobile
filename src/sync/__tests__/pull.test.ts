@@ -433,6 +433,53 @@ describe('le ressenti', () => {
   });
 });
 
+describe('la consigne de case (#128)', () => {
+  const PLAN = { id: 7, title: 'Force' };
+  const INSTRUCTION = 'Descente lente en 3 s sur squat et fentes.';
+
+  it('descend avec la séance, et se retire quand le web la retire', () => {
+    seedBootstrap({
+      schedule: [scheduledWorkoutPayload(UUID, { plan: PLAN, planInstruction: INSTRUCTION })],
+    });
+
+    expect(db.select().from(scheduledWorkout).all()[0].planInstruction).toBe(INSTRUCTION);
+
+    applyBootstrap(
+      bootstrapPayload({
+        schedule: [scheduledWorkoutPayload(UUID, { plan: PLAN, planInstruction: null })],
+      }),
+    );
+
+    expect(db.select().from(scheduledWorkout).all()[0].planInstruction).toBeNull();
+  });
+
+  it('descend aussi sur une séance protégée : c’est de la programmation', () => {
+    seedBootstrap({ schedule: [scheduledWorkoutPayload(UUID, { plan: PLAN })] });
+
+    enqueueSchedulePut(UUID);
+
+    applyBootstrap(
+      bootstrapPayload({
+        schedule: [scheduledWorkoutPayload(UUID, { plan: PLAN, planInstruction: INSTRUCTION })],
+      }),
+    );
+
+    expect(db.select().from(scheduledWorkout).all()[0].planInstruction).toBe(INSTRUCTION);
+  });
+
+  it('reste en place quand le serveur ne connaît pas encore la clé', () => {
+    seedBootstrap({
+      schedule: [scheduledWorkoutPayload(UUID, { plan: PLAN, planInstruction: INSTRUCTION })],
+    });
+
+    const legacy = scheduledWorkoutPayload(UUID, { plan: PLAN });
+    delete legacy.planInstruction;
+    applyBootstrap(bootstrapPayload({ schedule: [legacy] }));
+
+    expect(db.select().from(scheduledWorkout).all()[0].planInstruction).toBe(INSTRUCTION);
+  });
+});
+
 describe('une séance que le serveur ne connaît pas encore', () => {
   it('reçoit la programmation, garde son réalisé et son statut', () => {
     seedBootstrap({

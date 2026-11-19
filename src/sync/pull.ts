@@ -295,6 +295,7 @@ function applyWholeWorkout(tx: Transaction, workout: ScheduledWorkoutPayload): v
     ...(workout.feeling !== undefined ? { feeling: workout.feeling } : {}),
     ...(workout.sessionRpe !== undefined ? { sessionRpe: workout.sessionRpe } : {}),
     plan: workout.plan,
+    ...planInstruction(workout),
   };
 
   tx.insert(scheduledWorkout)
@@ -303,6 +304,14 @@ function applyWholeWorkout(tx: Transaction, workout: ScheduledWorkoutPayload): v
     .run();
 
   replaceLog(tx, workout);
+}
+
+/**
+ * La consigne de case (#128), comme le ressenti : une clé absente (serveur
+ * antérieur) laisse la colonne telle quelle plutôt que de l'effacer.
+ */
+function planInstruction(workout: ScheduledWorkoutPayload): { planInstruction?: string | null } {
+  return workout.planInstruction !== undefined ? { planInstruction: workout.planInstruction } : {};
 }
 
 /**
@@ -322,6 +331,9 @@ function applyProgrammingOnly(tx: Transaction, workout: ScheduledWorkoutPayload)
       title: workout.title,
       freeform: workout.freeform,
       plan: workout.plan,
+      // La consigne de case est de la programmation : retouchée sur le web
+      // pendant la séance, elle doit se lire à la série suivante.
+      ...planInstruction(workout),
     })
     .where(eq(scheduledWorkout.uuid, workout.uuid))
     .run();

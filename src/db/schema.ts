@@ -232,6 +232,14 @@ export const scheduledWorkout = sqliteTable(
     sessionRpe: integer('session_rpe'),
     /** `{id, title}` ou absent. Un document, parce qu'on ne synchronise pas les plans. */
     plan: text('plan', { mode: 'json' }).$type<PlanRef>(),
+    /**
+     * La consigne de la case du plan (« descente lente en 3 s sur squat et
+     * fentes », #128), écrite sur le web par le coach ou l'athlète. Du programme,
+     * donc du serveur : elle descend à chaque pull, séance protégée comprise, et
+     * ne remonte jamais. Null hors plan, case retirée ou note vide — le serveur
+     * ne descend pas de chaîne vide.
+     */
+    planInstruction: text('plan_instruction'),
   },
   (t) => [
     // L'écran « Aujourd'hui » (KL-28) et ses jours voisins lisent par date.
