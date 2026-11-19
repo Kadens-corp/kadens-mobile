@@ -35,6 +35,7 @@ import {
 import {
   activityLabel,
   addExercise,
+  batchesSets,
   adjustRest,
   beginWorkout,
   blockRoleLabel,
@@ -77,6 +78,7 @@ import {
   startRestAfterSet,
   stopRest,
   unchainExercise,
+  reopenedSet,
   uncheckSet,
   updateSet,
   useExerciseLibrary,
@@ -188,7 +190,9 @@ import {
  * il reste écrit à côté, et l'écart se lit avant la série au lieu d'après.
  *
  * **Ajouter une série n'ouvre rien, et ne la coche pas** (KL-39, revu). Elle naît
- * pré-remplie par la précédente — ce qui est juste dans le cas courant — mais
+ * pré-remplie par la précédente, correction comprise, ou par la dernière
+ * exécution de l'exercice s'il n'y a rien avant elle — ce qui est juste dans le
+ * cas courant — mais
  * **pas faite** : c'est une ligne cochable de plus, en attente comme les autres.
  * La version d'origine la consignait d'office, si bien qu'annoncer une série de
  * plus revenait à déclarer l'avoir faite, et le repos partait avant l'effort. La
@@ -250,10 +254,11 @@ export default function SessionScreen() {
   const workout = useWorkout(uuid);
   const base = useSessionProgram(uuid);
   const pendingSync = useWorkoutPendingSync(uuid);
-  // Les séries annoncées et pas encore faites, par clé d'exercice. En mémoire
-  // seulement : une série non faite n'est ni du prescrit ni du réalisé, elle n'a
-  // aucune colonne où s'écrire (`withDraftSets`).
-  const [drafts, setDrafts] = useState<ReadonlySet<string>>(() => new Set());
+  // Combien de séries sont annoncées et pas encore faites, par clé d'exercice :
+  // une au plus sur un exercice du programme, autant qu'on veut hors programme
+  // (`batchesSets`). En mémoire seulement : une série non faite n'est ni du
+  // prescrit ni du réalisé, elle n'a aucune colonne où s'écrire (`withDraftSets`).
+  const [drafts, setDrafts] = useState<ReadonlyMap<string, number>>(() => new Map());
   // Les valeurs corrigées **avant** que la série soit faite, par clé de série.
   // Même statut que les brouillons ci-dessus, et pour la même raison : ni du
   // prescrit ni du réalisé, donc aucune colonne où s'écrire
@@ -263,14 +268,19 @@ export default function SessionScreen() {
   // pas — `checkSet` écrit `null` pour la même raison, et il se saisit après coup
   // dans la feuille de la série faite.
   const [overrides, setOverrides] = useState<ReadonlyMap<string, SetValues>>(() => new Map());
+  // La dernière performance de chaque exercice. Lue sur le déroulé **avant**
+  // brouillons : ils ne changent pas la liste des exercices, et la série annoncée
+  // d'un exercice hors programme en a besoin pour naître (sa dernière exécution).
+  const history = useSessionHistory(base);
   // L'ordre compte : les corrections se posent **après** les brouillons, la série
   // annoncée n'existant pas avant d'être projetée — et c'est justement une de
-  // celles qu'on veut pouvoir corriger avant de la faire.
+  // celles qu'on veut pouvoir corriger avant de la faire. Les brouillons les
+  // lisent quand même, pour que chacun recopie la série d'avant telle qu'elle
+  // s'affiche (`withDraftSets`).
   const program = useMemo(
-    () => withPlannedOverrides(withDraftSets(base, drafts), overrides),
-    [base, drafts, overrides],
+    () => withPlannedOverrides(withDraftSets(base, drafts, { overrides, history }), overrides),
+    [base, drafts, overrides, history],
   );
-  const history = useSessionHistory(program);
   // Les réglages de machine, lus comme l'historique : une lecture pour tout le
   // déroulé, indexée par exercice.
   const setups = useSessionSetups(program);
@@ -345,22 +355,42 @@ export default function SessionScreen() {
   // non `useKeepAwake()` : cet écran se monte aussi pour relire une séance close.
   useKeepScreenAwake(running);
 
-  // La série annoncée est **consommée par la validation suivante**, quelle
-  // qu'elle soit : cochée, elle devient du réalisé et la ligne repousse par le
-  // bas ; décochée, l'exercice repart d'une ligne en attente et deux cibles
-  // vaudraient une de trop. Une seule règle, donc aucune clé qui traîne.
-  const dropDraft = useCallback((key: string) => {
+  // Le nombre de séries annoncées d'un exercice, décalé de `delta`. Zéro efface
+  // la clé : aucune ne traîne derrière un exercice qui n'annonce plus rien.
+  const shiftDrafts = useCallback((key: string, delta: number) => {
     setDrafts((current) => {
-      if (!current.has(key)) {
+      const count = Math.max(0, (current.get(key) ?? 0) + delta);
+
+      if (count === (current.get(key) ?? 0)) {
         return current;
       }
 
-      const next = new Set(current);
-      next.delete(key);
+      const next = new Map(current);
+
+      if (count === 0) {
+        next.delete(key);
+      } else {
+        next.set(key, count);
+      }
 
       return next;
     });
   }, []);
+
+  // Sur un exercice du programme, la série annoncée est **consommée par la
+  // validation suivante**, quelle qu'elle soit : cochée, elle devient du réalisé
+  // et la ligne repousse par le bas ; décochée, l'exercice repart d'une ligne en
+  // attente et deux cibles vaudraient une de trop. Une seule règle, donc aucune
+  // clé qui traîne.
+  //
+  // Hors programme, elles s'annoncent par lot (#132) : cocher n'en consomme
+  // qu'une, celle qu'on vient de faire, et les suivantes attendent leur tour.
+  const consumeDraft = useCallback(
+    (exercise: SessionExercise) =>
+      // `-Infinity` : toutes, la seule qu'il pouvait porter comprise.
+      shiftDrafts(exercise.key, batchesSets(exercise) ? -1 : -Infinity),
+    [shiftDrafts],
+  );
 
   // La correction posée d'avance est **consommée par la coche** : la série est
   // faite, ses valeurs sont en base, et la corriger encore passe désormais par la
@@ -402,22 +432,39 @@ export default function SessionScreen() {
   //
   // Cocher **démarre le repos**, décocher l'arrête : la série qu'on annule n'a
   // pas eu lieu, le repos qui la suivait non plus.
+  //
+  // Hors programme, décocher ne fait pas disparaître la série : elle redevient à
+  // faire, au même rang et aux mêmes valeurs (`reopenedSet`). Un appui à côté de
+  // la case effaçait sinon une série faite, valeurs comprises.
   const onCheck = useCallback(
     (exercise: SessionExercise, line: SessionSetLine) => {
       if (line.actionable) {
         if (checkSet(uuid, exercise, line)) {
-          dropDraft(exercise.key);
+          consumeDraft(exercise);
           dropOverride(lineKey(exercise, line));
           startRestAfterSet(exercise);
         }
       } else if (line.undoable) {
+        const reopened = reopenedSet(exercise, line, history);
+
         if (uncheckSet(uuid, exercise, line)) {
-          dropDraft(exercise.key);
+          if (reopened === null) {
+            consumeDraft(exercise);
+          } else {
+            shiftDrafts(exercise.key, 1);
+
+            if (reopened.override !== null) {
+              const values = reopened.override;
+
+              setOverrides((current) => new Map(current).set(reopened.key, values));
+            }
+          }
+
           stopRest();
         }
       }
     },
-    [uuid, dropDraft, dropOverride],
+    [uuid, history, consumeDraft, shiftDrafts, dropOverride],
   );
 
   const onCardio = useCallback(
@@ -429,8 +476,26 @@ export default function SessionScreen() {
   // attente, pré-remplie par la précédente, et rien ne part en base tant qu'elle
   // n'est pas cochée. Le repos non plus — il suit l'effort, pas l'intention.
   const onAddSet = useCallback(
-    (exercise: SessionExercise) => setDrafts((current) => new Set(current).add(exercise.key)),
-    [],
+    (exercise: SessionExercise) => shiftDrafts(exercise.key, 1),
+    [shiftDrafts],
+  );
+
+  // Retirer la **dernière** série annoncée. Jamais une série faite : celle-là se
+  // décoche d'abord, et c'est ce qui rend le bouton sans danger sous le pouce.
+  // Sa correction posée d'avance part avec elle, sinon elle réapparaîtrait sur la
+  // prochaine série annoncée au même rang.
+  const onDropSet = useCallback(
+    (exercise: SessionExercise) => {
+      const last = exercise.lines?.findLast((line) => line.draft) ?? null;
+
+      if (last === null) {
+        return;
+      }
+
+      dropOverride(lineKey(exercise, last));
+      shiftDrafts(exercise.key, -1);
+    },
+    [shiftDrafts, dropOverride],
   );
 
   // La cible de la barre basse : le même geste que cocher la ligne, au pouce.
@@ -443,12 +508,12 @@ export default function SessionScreen() {
       }
 
       if (checkSet(uuid, pending.exercise, pending.line)) {
-        dropDraft(pending.exercise.key);
+        consumeDraft(pending.exercise);
         dropOverride(lineKey(pending.exercise, pending.line));
         startRestAfterSet(pending.exercise);
       }
     },
-    [uuid, dropDraft, dropOverride],
+    [uuid, consumeDraft, dropOverride],
   );
 
   // Annuler la séance : elle n'a pas eu lieu. **Confirmé**, parce que c'est le
@@ -482,7 +547,7 @@ export default function SessionScreen() {
               return;
             }
 
-            setDrafts(new Set());
+            setDrafts(new Map());
             setOverrides(new Map());
             setReordering(false);
 
@@ -715,7 +780,7 @@ export default function SessionScreen() {
                   onCardio={onCardio}
                   onAdjustSet={setOpenSet}
                   onAddSet={onAddSet}
-                  onDropSet={dropDraft}
+                  onDropSet={onDropSet}
                   onOpenExercise={setOpenExercise}
                   onOpenSetup={setOpenSetup}
                 />
@@ -758,7 +823,7 @@ export default function SessionScreen() {
                     onCardio={onCardio}
                     onAdjustSet={setOpenSet}
                     onAddSet={onAddSet}
-                    onDropSet={dropDraft}
+                    onDropSet={onDropSet}
                     onOpenExercise={setOpenExercise}
                     onOpenSetup={setOpenSetup}
                   />
@@ -1312,8 +1377,8 @@ type SectionHandlers = {
   /** Ouvre la feuille d'une série. Prend sa **clé composée** (`lineKey`). */
   onAdjustSet: (key: string) => void;
   onAddSet: (exercise: SessionExercise) => void;
-  /** Retire la série annoncée et pas encore faite. Prend la clé de l'exercice. */
-  onDropSet: (exerciseKey: string) => void;
+  /** Retire la dernière série annoncée et pas encore faite. Jamais une série faite. */
+  onDropSet: (exercise: SessionExercise) => void;
   onOpenExercise: (key: string) => void;
   /** Ouvre la feuille des réglages de machine. Prend la clé de l'exercice. */
   onOpenSetup: (key: string) => void;
@@ -1574,9 +1639,10 @@ function ExerciseSection({
   const arrivalStyle = useMemo(() => rising(arrival), [arrival]);
   const announceStyle = useMemo(() => rising(announce), [announce]);
   const sweepStyle = useMemo(() => ({ transform: [{ scaleX: sweep }] }), [sweep]);
-  // Une série annoncée attend d'être faite : le bouton devient sa reprise, pas un
-  // second ajout. C'est aussi ce qui limite l'annonce à une ligne à la fois — on
-  // n'annonce pas trois séries d'avance, on en fait une.
+  // Une série annoncée attend d'être faite : sur un exercice du programme, le
+  // bouton devient sa reprise, pas un second ajout. C'est aussi ce qui y limite
+  // l'annonce à une ligne à la fois — le programme dit déjà combien il en faut,
+  // la série en plus reste l'exception.
   const drafted = editable && (lines?.some((line) => line.draft) ?? false);
   // « Ajouter une série » n'a de sens qu'une fois le prescrit épuisé : tant qu'une
   // ligne de travail attend, cocher la suivante **est** le geste, et proposer les
@@ -1586,6 +1652,9 @@ function ExerciseSection({
     !exercise.skipped &&
     lines !== null &&
     lines.every((line) => line.planned === null || line.type === 'warmup' || line.logged !== null);
+  // Hors programme, rien ne dit combien de séries viennent : elles s'annoncent par
+  // lot (#132), et le bouton se coupe en deux pour en retirer autant.
+  const batched = editable && !exercise.skipped && batchesSets(exercise);
 
   return (
     // La marque de l'exercice courant est un **rail d'encre**, pas un fond : le
@@ -1684,13 +1753,36 @@ function ExerciseSection({
         ))
       )}
 
-      {drafted ? (
+      {batched ? (
+        // Deux moitiés égales, toujours là toutes les deux : un bouton qui change
+        // de rôle sous le pouce est exactement l'appui à côté qu'on veut éviter.
+        // « − Série » reste dans le flux, grisé, quand rien n'est annoncé.
+        <View style={styles.setSteps}>
+          <Button
+            label="− Série"
+            variant="ghost"
+            accessibilityLabel="Retirer une série"
+            accessibilityHint="Retire la dernière série pas encore cochée. Les séries faites ne bougent pas"
+            disabled={!drafted}
+            onPress={() => onDropSet(exercise)}
+            style={styles.setStep}
+          />
+          <Button
+            label="+ Série"
+            variant="ghost"
+            accessibilityLabel="Ajouter une série"
+            accessibilityHint="Elle reste à cocher, et rien n’est consigné avant"
+            onPress={() => onAddSet(exercise)}
+            style={styles.setStep}
+          />
+        </View>
+      ) : drafted ? (
         <Button
           label="Retirer la série"
           variant="ghost"
           block
           accessibilityHint="Elle n’a pas encore été consignée : rien ne sera perdu"
-          onPress={() => onDropSet(exercise.key)}
+          onPress={() => onDropSet(exercise)}
         />
       ) : canAddSet ? (
         <Button
@@ -3549,6 +3641,8 @@ const sheets = themed((c) => ({
     backgroundColor: c.surfaceSubtle,
   },
   exerciseHead: { flexDirection: 'row', alignItems: 'center', gap: space[4] },
+  setSteps: { flexDirection: 'row', gap: space[4] },
+  setStep: { flex: 1 },
   exerciseCount: { ...text.numeric, color: c.textSecondary },
   exerciseCountWrapped: { color: c.statusDone },
   // « Ensuite » : un sur-titre et un nom, rien qui ressemble à une cible — la

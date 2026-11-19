@@ -70,18 +70,18 @@ export function exerciseAt(uuid: string, index = 0): SessionExercise {
 }
 
 /**
- * Le même exercice, sa série annoncée posée : ce que l'écran a sous les yeux
- * après un appui sur « + Série ».
+ * Le même exercice, ses séries annoncées posées : ce que l'écran a sous les
+ * yeux après `count` appuis sur « + Série ».
  *
  * L'écran tient les clés en mémoire et les projette au rendu (`withDraftSets`) :
  * un test qui fabriquerait la ligne à la main exercerait sa propre idée du
  * brouillon, pas celle de l'app.
  */
-export function draftedExerciseAt(uuid: string, index = 0): SessionExercise {
+export function draftedExerciseAt(uuid: string, index = 0, count = 1): SessionExercise {
   const program = programOf(uuid);
   const exercise = at(program, index, uuid);
 
-  return at(withDraftSets(program, new Set([exercise.key])), index, uuid);
+  return at(withDraftSets(program, new Map([[exercise.key, count]])), index, uuid);
 }
 
 function at(program: SessionProgram, index: number, uuid: string): SessionExercise {

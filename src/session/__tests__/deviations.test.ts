@@ -24,9 +24,17 @@ import {
   checkSet,
   deleteSet,
   removeExercise,
+  reopenedSet,
   replaceExercise,
   setExerciseState,
+  uncheckSet,
   updateSet,
+  withDraftSets,
+  withPlannedOverrides,
+  lineKey,
+  lineValues,
+  type DraftSources,
+  type SetValues,
 } from '@/session';
 import { listMutations } from '@/sync';
 import { resetDatabase } from '@/test/database';
@@ -202,6 +210,259 @@ describe('la série annoncée en plus', () => {
 
     // Un exercice sauté est réglé, pas en cours.
     expect(draftedExerciseAt(UUID, 1).lines!.some((line) => line.draft)).toBe(false);
+  });
+});
+
+describe('les séries annoncées par lot (#132)', () => {
+  /** Un exercice hors programme ajouté à la séance : il est au rang 1. */
+  function openWithExtra(): void {
+    openStrengthWorkout();
+    addExercise(UUID, { id: 202, name: 'Développé guidé' }, programOf(UUID).prescribedCount);
+  }
+
+  /**
+   * Ce que l'écran a sous les yeux pour l'exercice hors programme : ses séries
+   * annoncées, les corrections posées d'avance et l'historique, dans l'ordre où
+   * l'écran les compose.
+   */
+  function extraWith(
+    count: number,
+    overrides: ReadonlyMap<string, SetValues> = new Map(),
+    history: DraftSources['history'] = new Map(),
+  ) {
+    const program = withPlannedOverrides(
+      withDraftSets(programOf(UUID), new Map([[programOf(UUID).extras[0].key, count]]), {
+        overrides,
+        history,
+      }),
+      overrides,
+    );
+
+    return program.extras[0];
+  }
+
+  /** Une dernière séance de l'exercice 202 : un échauffement, puis 3 × 8 à 70 kg. */
+  const lastTime: DraftSources['history'] = new Map([
+    [
+      202,
+      {
+        last: {
+          date: '2026-11-12',
+          workingSets: 3,
+          tonnageKg: 1680,
+          topWeightKg: 70,
+          sets: [
+            {
+              type: 'warmup',
+              count: 1,
+              reps: 10,
+              weightKg: 40,
+              durationSeconds: null,
+              firstIndex: 1,
+              lastIndex: 1,
+            },
+            {
+              type: 'normal',
+              count: 3,
+              reps: 8,
+              weightKg: 70,
+              durationSeconds: null,
+              firstIndex: 2,
+              lastIndex: 4,
+            },
+          ],
+        },
+      },
+    ],
+  ]);
+
+  /** Coche la première série annoncée de l'exercice hors programme, à ces valeurs. */
+  function doExtraSet(reps: number, weightKg: number): void {
+    checkExtraSet(1);
+
+    const lines = exerciseAt(UUID, 1).lines!;
+
+    updateSet(UUID, lines[lines.length - 1], { reps, weightKg, durationSeconds: null, rpe: null });
+  }
+
+  it('hors programme, s’annoncent à plusieurs et se cochent dans l’ordre', () => {
+    openWithExtra();
+
+    const drafts = draftedExerciseAt(UUID, 1, 3).lines!;
+
+    expect(drafts.map((line) => line.draft)).toEqual([true, true, true]);
+    expect(drafts.map((line) => line.index)).toEqual([1, 2, 3]);
+    // Séquentiel comme le reste : la suivante attend que la première soit faite.
+    expect(drafts.map((line) => line.actionable)).toEqual([true, false, false]);
+    // Et rien en base : trois intentions, aucun fait.
+    expect(exerciseAt(UUID, 1).lines).toEqual([]);
+  });
+
+  it('cocher la première laisse les suivantes à leur rang, pré-remplies par elle', () => {
+    openWithExtra();
+
+    const before = draftedExerciseAt(UUID, 1, 3);
+    const keys = before.lines!.map((line) => lineKey(before, line));
+
+    checkSet(UUID, before, before.lines![0]);
+    updateSet(UUID, exerciseAt(UUID, 1).lines![0], {
+      reps: 10,
+      weightKg: 50,
+      durationSeconds: null,
+      rpe: null,
+    });
+
+    // L'écran en consomme une : il en reste deux, aux mêmes clés qu'avant.
+    const after = extraWith(2);
+    const remaining = after.lines!.filter((line) => line.draft);
+
+    expect(remaining.map((line) => lineKey(after, line))).toEqual(keys.slice(1));
+    expect(remaining[0].actionable).toBe(true);
+    expect(remaining[0].planned).toMatchObject({ reps: 10, weightKg: 50 });
+  });
+
+  it('un exercice du programme n’en porte qu’une à la fois', () => {
+    openStrengthWorkout();
+    checkNext();
+    checkNext();
+    checkNext();
+    checkNext();
+
+    expect(draftedExerciseAt(UUID, 0, 3).lines!.filter((line) => line.draft)).toHaveLength(1);
+  });
+
+  it('décocher une série hors programme la rend à faire, avec ses valeurs', () => {
+    openWithExtra();
+    checkExtraSet(1);
+    updateSet(UUID, exerciseAt(UUID, 1).lines![0], {
+      reps: 10,
+      weightKg: 50,
+      durationSeconds: null,
+      rpe: null,
+    });
+    checkExtraSet(1);
+    updateSet(UUID, exerciseAt(UUID, 1).lines![1], {
+      reps: 8,
+      weightKg: 55,
+      durationSeconds: null,
+      rpe: null,
+    });
+
+    const extra = exerciseAt(UUID, 1);
+    const done = extra.lines![1];
+    const reopened = reopenedSet(extra, done)!;
+
+    // Le pré-remplissage redonnerait 10 × 50 kg : la correction garde 8 × 55.
+    expect(reopened.override).toEqual({ reps: 8, weightKg: 55, durationSeconds: null });
+    expect(uncheckSet(UUID, extra, done)).toBe(true);
+
+    // Ce que l'écran pose alors : une série annoncée de plus, et la correction.
+    const after = extraWith(1, new Map([[reopened.key, reopened.override!]]));
+    const line = after.lines![1];
+
+    expect(line.draft).toBe(true);
+    expect(line.actionable).toBe(true);
+    expect(lineKey(after, line)).toBe(reopened.key);
+    expect(lineValues(line)).toMatchObject({ reps: 8, weightKg: 55 });
+  });
+
+  it('ne pose aucune correction quand le pré-remplissage redonne les valeurs', () => {
+    openWithExtra();
+    checkExtraSet(1);
+    updateSet(UUID, exerciseAt(UUID, 1).lines![0], {
+      reps: 10,
+      weightKg: 50,
+      durationSeconds: null,
+      rpe: null,
+    });
+    checkExtraSet(1);
+
+    const extra = exerciseAt(UUID, 1);
+
+    expect(reopenedSet(extra, extra.lines![1])).toEqual({
+      key: `${extra.key}/d2`,
+      override: null,
+    });
+  });
+
+  it('chaque série annoncée recopie la précédente, correction comprise', () => {
+    openWithExtra();
+    doExtraSet(10, 50);
+
+    const key = (index: number) => `${programOf(UUID).extras[0].key}/d${index}`;
+
+    // Sans correction, les trois recopient la dernière faite.
+    expect(
+      extraWith(3)
+        .lines!.slice(1)
+        .map((line) => line.planned?.weightKg),
+    ).toEqual([50, 50, 50]);
+
+    // La deuxième passe à 60 kg : celles d'après suivent. La troisième à 65 kg :
+    // la quatrième la suit, la deuxième ne bouge pas.
+    const overrides = new Map<string, SetValues>([
+      [key(2), { reps: 8, weightKg: 60, durationSeconds: null }],
+      [key(3), { reps: 8, weightKg: 65, durationSeconds: null }],
+    ]);
+    const lines = extraWith(3, overrides).lines!.slice(1);
+
+    expect(lines.map((line) => lineValues(line)?.weightKg)).toEqual([60, 65, 65]);
+    expect(lines[2].planned).toMatchObject({ reps: 8, weightKg: 65 });
+  });
+
+  it('un exercice ajouté reprend sa dernière exécution, échauffement écarté', () => {
+    openWithExtra();
+
+    const lines = extraWith(2, new Map(), lastTime).lines!;
+
+    expect(lines.map((line) => line.planned)).toEqual([
+      { reps: 8, weightKg: 70, durationSeconds: null },
+      { reps: 8, weightKg: 70, durationSeconds: null },
+    ]);
+  });
+
+  it('la séance du jour prime sur la dernière exécution dès qu’une série est faite', () => {
+    openWithExtra();
+    doExtraSet(10, 50);
+
+    expect(extraWith(1, new Map(), lastTime).lines![1].planned).toMatchObject({
+      reps: 10,
+      weightKg: 50,
+    });
+  });
+
+  it('un exercice jamais fait naît vide', () => {
+    openWithExtra();
+
+    expect(extraWith(1).lines![0].planned).toEqual({
+      reps: null,
+      weightKg: null,
+      durationSeconds: null,
+    });
+  });
+
+  it('décocher la seule série la rend à faire sans correction si elle valait la dernière exécution', () => {
+    openWithExtra();
+    doExtraSet(8, 70);
+
+    const extra = exerciseAt(UUID, 1);
+
+    expect(reopenedSet(extra, extra.lines![0], lastTime)?.override).toBeNull();
+    // Sans historique, rien ne la redonnerait : la correction la garde.
+    expect(reopenedSet(extra, extra.lines![0])?.override).toEqual({
+      reps: 8,
+      weightKg: 70,
+      durationSeconds: null,
+    });
+  });
+
+  it('ne concerne pas un exercice du programme : décocher y remet la ligne prescrite', () => {
+    openStrengthWorkout();
+    checkNext();
+
+    const exercise = exerciseAt(UUID);
+
+    expect(reopenedSet(exercise, exercise.lines![0])).toBeNull();
   });
 });
 

@@ -17,8 +17,22 @@ la version taguée et s'en sert comme description de la GitHub Release. Un tag
   muscu faites, et le corps avec les muscles travaillés et leurs séries, comme à
   la clôture d'une séance. Tout se lit sur le téléphone, même hors réseau, et
   une série cochée apparaît tout de suite sur le dessin.
+- **Plusieurs séries d'un coup sur un exercice hors programme** : dans une
+  séance libre, ou sur un exercice ajouté à une séance programmée, le bouton se
+  coupe en deux, « − Série » et « + Série ». On annonce ses quatre séries avant
+  de commencer, puis on les coche une à une. « − Série » ne retire que des
+  séries pas encore cochées. Les exercices du programme gardent leur bouton.
+- **Une série ajoutée recopie la précédente** : mêmes charges, mêmes
+  répétitions, y compris une valeur corrigée avant de la faire. Passer la
+  première à 60 kg met les suivantes à 60 kg.
+- **Un exercice ajouté reprend sa dernière exécution** : sa première série part
+  de la première série de travail de la dernière fois, échauffement écarté.
 
 ### Corrigé
+
+- **Décocher une série hors programme ne l'efface plus** : elle redevient à
+  faire, au même rang et avec ses valeurs. Un appui à côté de la case ne fait
+  plus perdre une série faite. Pour la retirer, on la décoche puis « − Série ».
 
 - **La recherche d'exercices tolère le pluriel et les mots soudés** :
   « tractions » trouve « Traction » et le place en tête, « pullups » trouve

@@ -45,7 +45,7 @@
  *    d'avance vit donc **hors base**, projeté sur le déroulé le temps du rendu,
  *    et va en base par `checkSet` comme tout le reste : la **série en brouillon**
  *    (`withDraftSets`, `program.ts`), une série de plus qu'on annonce avant de la
- *    faire, et la **correction posée d'avance** (`withPlannedOverrides`), la
+ *    faire (par lot hors programme, `batchesSets`), et la **correction posée d'avance** (`withPlannedOverrides`), la
  *    charge ou les répétitions qu'on sait déjà autres que prescrites. Les deux
  *    sont perdues si l'app est tuée : elles ne portaient qu'une intention.
  * 6 bis. **L'ordre dans lequel on la mène n'est pas le programme** (KL-52,
@@ -213,6 +213,7 @@ export {
 
 export {
   allExercises,
+  batchesSets,
   buildProgram,
   draftSetValues,
   EXTRAS_LANE,
@@ -226,12 +227,14 @@ export {
   lineValues,
   nextTarget,
   referencedExerciseIds,
+  reopenedSet,
   setDeviates,
   withDraftSets,
   withExecutionOrder,
   withPlannedOverrides,
 } from './program';
 export type {
+  DraftSources,
   ExecutionOrder,
   ExecutionSlot,
   SessionBlock,

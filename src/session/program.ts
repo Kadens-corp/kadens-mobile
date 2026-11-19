@@ -76,6 +76,7 @@
 import type {
   LoggedExerciseRow,
   LoggedSetRow,
+  PerformanceSession,
   PrescribedBlock,
   PrescribedExerciseLine,
   PrescribedSetLine,
@@ -491,8 +492,8 @@ function buildLines(
  * de plus. Corriger une série avant de la faire, si : l'écran retient ces
  * corrections dans une table, et deux exercices y auraient tous les deux une
  * « série 1 ». La composée est stable dans les trois cas : le rang prescrit ne
- * bouge pas, l'uuid d'une série faite non plus, et un brouillon en porte un seul
- * par exercice.
+ * bouge pas, l'uuid d'une série faite non plus, et un brouillon porte son rang
+ * affiché, que cocher le précédent ne déplace pas (`draftLinesFor`).
  */
 export function lineKey(exercise: SessionExercise, line: SessionSetLine): string {
   return `${exercise.key}/${line.key}`;
@@ -626,16 +627,42 @@ export function withPlannedOverrides(
  * y répond ; une série qu'on décide d'ajouter n'ajoute rien à ce que le programme
  * demande. Elle entre dans les compteurs au moment où elle est cochée, par la
  * voie normale (`Math.max(plannedCount, loggedCount)`, plus haut).
+ *
+ * ## Une à la fois, ou par lot (#132)
+ *
+ * L'écran tient un **nombre** de séries annoncées par exercice, et la règle qui
+ * borne ce nombre est `batchesSets()` : un exercice du programme en annonce une à
+ * la fois, un exercice hors programme autant qu'on veut. Seule la première de la
+ * file est cochable, comme partout (§ cocher est séquentiel, en tête de fichier).
+ *
+ * ## D'où viennent ses valeurs
+ *
+ * Elle **recopie la série d'avant**, telle qu'on la lit à l'écran. La première
+ * reprend la dernière faite (`draftSetValues`) ; chacune des suivantes reprend la
+ * précédente, correction posée d'avance comprise — d'où `overrides` ici, alors
+ * que `withPlannedOverrides` les pose après : annoncer quatre séries, passer la
+ * première à 60 kg, et les trois autres suivent. Une correction posée sur l'une
+ * d'elles ne remonte pas, elle descend seulement sur celles d'après.
+ *
+ * Un exercice hors programme qui n'a encore rien de fait aujourd'hui n'a pas de
+ * « série d'avant » dans la séance : sa première reprend alors sa **dernière
+ * exécution** (`history`, la dernière séance de l'exercice).
  */
-export function withDraftSets(program: SessionProgram, keys: ReadonlySet<string>): SessionProgram {
-  if (keys.size === 0) {
+export function withDraftSets(
+  program: SessionProgram,
+  drafts: ReadonlyMap<string, number>,
+  sources: DraftSources = {},
+): SessionProgram {
+  if (drafts.size === 0) {
     return program;
   }
 
   const draft = (exercise: SessionExercise): SessionExercise => {
-    const line = keys.has(exercise.key) ? draftLineFor(exercise) : null;
+    const added = draftLinesFor(exercise, drafts.get(exercise.key) ?? 0, sources);
 
-    return line === null ? exercise : { ...exercise, lines: [...(exercise.lines ?? []), line] };
+    return added.length === 0
+      ? exercise
+      : { ...exercise, lines: [...(exercise.lines ?? []), ...added] };
   };
 
   return {
@@ -648,44 +675,163 @@ export function withDraftSets(program: SessionProgram, keys: ReadonlySet<string>
   };
 }
 
+/** Ce que les séries annoncées lisent en plus du déroulé (`withDraftSets`). */
+export interface DraftSources {
+  /** Les corrections posées d'avance, par clé composée (`lineKey`). */
+  overrides?: ReadonlyMap<string, SetValues>;
+  /**
+   * La dernière séance de chaque exercice, par identifiant d'exercice. C'est la
+   * forme de `useSessionHistory()`, que l'écran passe telle quelle.
+   */
+  history?: ReadonlyMap<number, { last: PerformanceSession | null }>;
+}
+
 /**
- * La ligne en brouillon de cet exercice, ou `null` s'il n'y a pas lieu.
+ * Les lignes en brouillon de cet exercice, au plus `count`, aucune s'il n'y a pas
+ * lieu.
  *
  * Trois refus, tous repris du geste d'origine (`addSet`) : un cardio ne se
  * saisit pas, un exercice sauté est réglé, et une ligne du programme qui attend
  * encore **est** la prochaine série — en ajouter une par-dessus donnerait deux
- * cibles pour un seul fait.
+ * cibles pour un seul fait. Un exercice du programme n'en porte qu'une
+ * (`batchesSets`), quel que soit le nombre que l'écran retient.
  */
-function draftLineFor(exercise: SessionExercise): SessionSetLine | null {
+function draftLinesFor(
+  exercise: SessionExercise,
+  count: number,
+  sources: DraftSources,
+): SessionSetLine[] {
   const lines = exercise.lines;
 
-  if (lines === null || exercise.skipped || lines.some((line) => line.actionable)) {
-    return null;
+  if (count <= 0 || lines === null || exercise.skipped || lines.some((line) => line.actionable)) {
+    return [];
   }
 
+  const last = lines[lines.length - 1]?.index ?? 0;
+  const size = batchesSets(exercise) ? count : 1;
+  let previous = draftSetValues(exercise, lastSessionOf(exercise, sources.history));
+
+  return Array.from({ length: size }, (_, rank): SessionSetLine => {
+    const line = draftLine(last + rank + 1, previous, rank === 0);
+
+    // La suivante recopie celle-ci telle qu'elle s'affichera : sa correction si
+    // on en a posé une, sinon ce qu'elle a elle-même recopié.
+    previous = sources.overrides?.get(lineKey(exercise, line)) ?? previous;
+
+    return line;
+  });
+}
+
+function draftLine(index: number, planned: SetValues, actionable: boolean): SessionSetLine {
   return {
-    // Une seule ligne en brouillon par exercice : la clé n'a pas à être numérotée.
-    key: `d${exercise.key}`,
-    index: (lines[lines.length - 1]?.index ?? 0) + 1,
+    // Numérotée par son **rang affiché**, pas par son rang dans le lot : cocher
+    // la première la fait passer au réalisé au même rang, et les suivantes
+    // gardent leur clé — donc la correction qu'on y a posée d'avance
+    // (`withPlannedOverrides`, indexée par `lineKey`) reste sur la bonne ligne.
+    key: `d${index}`,
+    index,
     // Toujours de travail. Le type décide de la file d'appariement : un
     // échauffement ajouté après coup décalerait la lecture de toute la séance.
     type: 'normal',
-    planned: draftSetValues(exercise),
+    planned,
     override: null,
     logged: null,
-    actionable: true,
+    // Séquentiel comme le reste : la suivante attend que la première soit faite.
+    actionable,
     undoable: false,
     draft: true,
   };
 }
 
+/** La dernière séance de l'exercice, si l'historique local en connaît une. */
+function lastSessionOf(
+  exercise: SessionExercise,
+  history: DraftSources['history'],
+): PerformanceSession | null {
+  const id = exerciseIdOf(exercise);
+
+  return id === null ? null : (history?.get(id)?.last ?? null);
+}
+
 /**
- * Les valeurs d'une série ajoutée : la dernière faite, sinon la dernière prescrite.
+ * L'exercice s'annonce-t-il **par lot** de séries (#132) ?
  *
- * L'échauffement est écarté des deux côtés — une série ajoutée est une série de
+ * Oui hors programme — dans une séance libre, c'est tout ce qu'elle contient — et
+ * non sur un exercice du programme. Le premier n'a aucun prescrit pour dire
+ * combien de séries viennent : les annoncer une à une, en cochant entre deux,
+ * faisait d'un « 4 × 10 » quatre allers-retours. Le second sait déjà combien il
+ * en réclame, et la série en plus y reste l'exception qu'on annonce une à la fois.
+ *
+ * C'est aussi lui qui décide de ce que **décocher** veut dire (`reopenedSet`).
+ */
+export function batchesSets(exercise: SessionExercise): boolean {
+  return exercise.prescribed === null && exercise.lines !== null;
+}
+
+/**
+ * Ce que devient une série hors programme qu'on décoche : une série **à faire**,
+ * au même rang et aux mêmes valeurs (#132).
+ *
+ * Décocher efface la ligne en base (`uncheckSet`), et sur un exercice du
+ * programme ça suffit : la ligne prescrite reste, elle se remet seulement en
+ * attente. Hors programme, rien ne la retient — elle disparaissait avec ses
+ * valeurs, si bien qu'un appui à côté de la case effaçait une série faite. Elle
+ * revient donc en brouillon, à la tête de la file des séries annoncées, et c'est
+ * « − Série » qui la retire pour de bon : deux gestes, dont un délibéré.
+ *
+ * Rend la clé composée que portera ce brouillon, et la correction à y poser pour
+ * qu'il garde ses valeurs — `null` quand le pré-remplissage les redonne déjà.
+ * Le RPE ne suit pas : il se ressent, il ne s'annonce pas (`checkSet`).
+ */
+export function reopenedSet(
+  exercise: SessionExercise,
+  line: SessionSetLine,
+  history: DraftSources['history'] = undefined,
+): { key: string; override: SetValues | null } | null {
+  const lines = exercise.lines;
+  const logged = line.logged;
+
+  if (!batchesSets(exercise) || lines === null || logged === null) {
+    return null;
+  }
+
+  const rest = lines.filter((candidate) => candidate !== line && !candidate.draft);
+  const values: SetValues = {
+    reps: logged.reps,
+    weightKg: logged.weightKg,
+    durationSeconds: logged.durationSeconds,
+  };
+  const prefill = draftSetValues({ ...exercise, lines: rest }, lastSessionOf(exercise, history));
+  const same =
+    prefill.reps === values.reps &&
+    prefill.weightKg === values.weightKg &&
+    prefill.durationSeconds === values.durationSeconds;
+
+  return {
+    // Le premier brouillon prend le rang qui suit les séries restées faites
+    // (`draftLinesFor`) : les brouillons déjà annoncés gardent les leurs.
+    key: `${exercise.key}/d${(rest[rest.length - 1]?.index ?? 0) + 1}`,
+    override: same ? null : values,
+  };
+}
+
+/**
+ * Les valeurs d'une série ajoutée : la dernière faite, sinon la dernière
+ * prescrite, sinon la dernière exécution de l'exercice (`last`).
+ *
+ * La troisième ne sert qu'à un exercice hors programme qui n'a encore rien de
+ * fait dans la séance — un exercice du programme a toujours une ligne prescrite.
+ * On y prend sa **première** série de travail : on reprend l'exercice là où on
+ * l'avait commencé, et la série annoncée suivante recopie celle-ci
+ * (`withDraftSets`), pas la suivante d'il y a une semaine.
+ *
+ * L'échauffement est écarté partout — une série ajoutée est une série de
  * travail, la pré-remplir avec la barre à vide serait le pire des défauts.
  */
-export function draftSetValues(exercise: SessionExercise): SetValues {
+export function draftSetValues(
+  exercise: SessionExercise,
+  last: PerformanceSession | null = null,
+): SetValues {
   const empty: SetValues = { reps: null, weightKg: null, durationSeconds: null };
   const lines = exercise.lines ?? [];
   const work = lines.filter((line) => line.type !== 'warmup' && !line.draft);
@@ -699,7 +845,17 @@ export function draftSetValues(exercise: SessionExercise): SetValues {
     };
   }
 
-  return [...work].reverse().find((line) => line.planned !== null)?.planned ?? empty;
+  const lastPlanned = [...work].reverse().find((line) => line.planned !== null)?.planned;
+
+  if (lastPlanned) {
+    return lastPlanned;
+  }
+
+  const first = last?.sets.find((group) => group.type !== 'warmup');
+
+  return first
+    ? { reps: first.reps, weightKg: first.weightKg, durationSeconds: first.durationSeconds }
+    : empty;
 }
 
 /**
