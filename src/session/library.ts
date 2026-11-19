@@ -53,15 +53,21 @@ export interface ExerciseOption {
   /** Le libellé **affiché**, déjà résolu dans la langue du compte (`naming.ts`). */
   name: string;
   /**
-   * Ce sur quoi la frappe mord : les **deux** noms, repliés une fois pour
-   * toutes. « incline bench » trouve « Développé incliné » sur un téléphone en
-   * français, et l'inverse — on cherche un mouvement dans la langue où on l'a
-   * appris, pas dans celle où l'app l'affiche.
+   * Ce sur quoi la frappe mord : les **deux** noms, repliés puis **soudés**
+   * (privés de leurs espaces) une fois pour toutes. « incline bench » trouve
+   * « Développé incliné » sur un téléphone en français, et l'inverse — on
+   * cherche un mouvement dans la langue où on l'a appris, pas dans celle où
+   * l'app l'affiche.
+   *
+   * Soudé pour les mots qu'on tape d'un bloc (#14) : « pullups » trouve
+   * « Pull-up », « pushup » trouve « Push-up ». Le texte espacé n'est pas gardé
+   * à côté : un mot tapé n'a pas d'espace, donc tout ce que le texte espacé
+   * contient, le texte soudé le contient aussi.
    *
    * Précalculé et non replié à la frappe : `fold()` s'appliquerait sinon à toute
    * la bibliothèque à chaque caractère tapé.
    */
-  search: string;
+  searchSolid: string;
   /** Exercice de l'app (par opposition à un exercice perso). Marqué à l'écran. */
   global: boolean;
   activity: ActivityType;
@@ -94,7 +100,7 @@ export function toOptions(
     .map((row) => ({
       id: row.id,
       name: exerciseLabel(row, language),
-      search: fold(exerciseSearchText(row)),
+      searchSolid: fold(exerciseSearchText(row)).replace(/ /g, ''),
       global: row.global,
       activity: row.activity,
       targetAreas: row.targetAreas,
@@ -181,6 +187,25 @@ export function fold(value: string): string {
 }
 
 /**
+ * Le mot tapé sans sa marque de pluriel : `s` ou `x` final retiré (#14).
+ *
+ * Même règle que `stem()` côté web (`assets/search.js`, kadens#98), et
+ * volontairement aussi fruste : un vrai stemmer ferait plus de dégâts qu'il n'en
+ * répare sur des noms à moitié anglais. Garde-fous : le mot doit être fait de
+ * lettres (« 4x » reste « 4x ») et garder au moins deux lettres (« ups » devient
+ * « up », « os » reste « os »). Retirer une lettre à un mot qui n'était pas au
+ * pluriel (« biceps », « press ») ne coûte rien : la recherche étant par
+ * sous-chaîne, le mot entier reste trouvé.
+ *
+ * S'applique au mot **déjà replié**. `fold()` garde la ponctuation autre que
+ * `-` et `'` : un mot tapé avec une parenthèse ne passe pas la regex et se
+ * cherche tel quel, ce qui est le comportement d'avant.
+ */
+export function stem(word: string): string {
+  return /^[a-z]{2,}[sx]$/.test(word) ? word.slice(0, -1) : word;
+}
+
+/**
  * Filtre la bibliothèque sur ce qui est tapé.
  *
  * Chaque **mot** du terme doit se retrouver dans l'un des deux noms, dans
@@ -189,10 +214,17 @@ export function fold(value: string): string {
  * précisément la façon dont on se souvient d'un nom d'exercice — par deux
  * morceaux, rarement dans l'ordre.
  *
+ * Chaque mot se cherche **au singulier** et dans le texte **soudé** (#14) :
+ * « tractions » trouve « Traction », « pullups » trouve « Pull-up ». La
+ * recherche étant par sous-chaîne, raccourcir le mot suffit : « pompe »
+ * trouvait déjà « Pompes », c'est l'autre sens qui manquait.
+ *
  * À égalité, ce qui **commence** par le terme passe devant : « dips » doit sortir
  * « Dips » avant « Dips lestés à la ceinture ». Ce palier-là se juge sur le seul
  * nom **affiché** : une entrée qui remonterait en tête à cause d'un libellé qu'on
- * ne voit pas se lirait comme un tri cassé.
+ * ne voit pas se lirait comme un tri cassé. Il accepte le terme tel que tapé
+ * **ou** au singulier, pour que « tractions » sorte « Traction » en tête, comme
+ * « traction ».
  */
 export function searchExercises(
   library: ExerciseOption[],
@@ -200,17 +232,23 @@ export function searchExercises(
   limit: number = SEARCH_LIMIT,
 ): ExerciseOption[] {
   const needle = fold(term);
-  const words = needle.split(' ').filter((word) => word.length > 0);
+  const words = needle
+    .split(' ')
+    .filter((word) => word.length > 0)
+    .map(stem);
 
   if (words.length === 0) {
     return library.slice(0, limit);
   }
 
+  const loose = words.join(' ');
+  const startsWith = (folded: string) => folded.startsWith(needle) || folded.startsWith(loose);
+
   return library
     .map((option) => ({ option, folded: fold(option.name) }))
-    .filter(({ option }) => words.every((word) => option.search.includes(word)))
+    .filter(({ option }) => words.every((word) => option.searchSolid.includes(word)))
     .sort((a, b) => {
-      const starts = Number(b.folded.startsWith(needle)) - Number(a.folded.startsWith(needle));
+      const starts = Number(startsWith(b.folded)) - Number(startsWith(a.folded));
 
       if (starts !== 0) {
         return starts;

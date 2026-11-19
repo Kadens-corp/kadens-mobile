@@ -11,6 +11,13 @@ la version taguée et s'en sert comme description de la GitHub Release. Un tag
 
 ## [Non publié]
 
+### Corrigé
+
+- **La recherche d'exercices tolère le pluriel et les mots soudés** :
+  « tractions » trouve « Traction » et le place en tête, « pullups » trouve
+  « Pull-up », « pushup » trouve « Push-up ». Même règle que sur le web. Un mot
+  tapé au pluriel ne fait plus croire qu'un exercice est absent.
+
 ## [1.5.0] - 2026-11-15
 
 ### Ajouté

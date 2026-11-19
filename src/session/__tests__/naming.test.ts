@@ -16,6 +16,7 @@ import {
   exerciseNameBook,
   exerciseSearchText,
   searchExercises,
+  stem,
   toOptions,
   type ExerciseRowForOption,
 } from '@/session';
@@ -93,6 +94,65 @@ describe('la bibliothèque affichée', () => {
     // Le même jeu, lu en anglais, se classe dans l'autre sens : trier sur le
     // français donnerait une liste dont l'ordre ne correspond à rien à l'écran.
     expect(toOptions(rows, 'en').map((row) => row.name)).toEqual(['Ab wheel', 'Zercher squat']);
+  });
+});
+
+/**
+ * La tolérance au pluriel et aux mots soudés (#14), en parité avec le web
+ * (kadens#98, `assets/search.js`) : on tape naturellement « tractions », et une
+ * liste vide fait croire l'exercice absent.
+ */
+describe('la recherche tolérante', () => {
+  const library = toOptions(
+    [
+      option({ id: 1, name: 'Traction', nameEn: 'Pull-up' }),
+      option({ id: 2, name: 'Traction en supination', nameEn: 'Chin-up' }),
+      option({ id: 3, name: 'Tirage vertical', nameEn: 'Lat pulldown' }),
+      option({ id: 4, name: 'Pompes', nameEn: 'Push-up' }),
+      option({ id: 5, name: 'Pompes diamant', nameEn: 'Diamond push-up' }),
+      option({ id: 6, name: 'Os du pied', nameEn: null }),
+      option({ id: 7, name: 'Squat 4x', nameEn: null }),
+      // Avant « Traction » dans l'alphabet : c'est lui qui sortirait en tête si
+      // le palier « commence par » ne regardait que le terme brut.
+      option({ id: 8, name: 'Assistance à la traction', nameEn: 'Assisted pull-up' }),
+    ],
+    'fr',
+  );
+  const names = (term: string) => searchExercises(library, term).map((row) => row.name);
+
+  it('retire la marque du pluriel, avec les garde-fous du web', () => {
+    expect(stem('tractions')).toBe('traction');
+    expect(stem('pompes')).toBe('pompe');
+    expect(stem('ups')).toBe('up');
+    // Un mot qui n'est pas fait de lettres, ou qui tomberait sous deux lettres, reste tel quel.
+    expect(stem('4x')).toBe('4x');
+    expect(stem('os')).toBe('os');
+  });
+
+  it('trouve au pluriel ce qui est écrit au singulier, et le classe en tête', () => {
+    // « Traction » commence par « traction », le singulier du terme : il passe
+    // devant comme si on avait tapé « traction ».
+    expect(names('tractions')).toEqual([
+      'Traction',
+      'Traction en supination',
+      'Assistance à la traction',
+    ]);
+    expect(names('tractions')).toEqual(names('traction'));
+  });
+
+  it('trouve un mot soudé dans un nom à trait d’union', () => {
+    expect(names('pullups')).toEqual(['Assistance à la traction', 'Traction']);
+    expect(names('pushup')).toEqual(['Pompes', 'Pompes diamant']);
+  });
+
+  it('garde le singulier écrit au pluriel, et le pluriel tapé tel quel', () => {
+    expect(names('pompe')).toEqual(['Pompes', 'Pompes diamant']);
+    expect(names('pompes')).toEqual(['Pompes', 'Pompes diamant']);
+  });
+
+  it('ne réduit ni un chiffre ni un mot de deux lettres', () => {
+    expect(names('4x')).toEqual(['Squat 4x']);
+    expect(names('os')).toEqual(['Os du pied']);
   });
 });
 

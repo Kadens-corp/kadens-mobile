@@ -174,6 +174,7 @@ export {
   libraryAreas,
   searchExercises,
   SEARCH_LIMIT,
+  stem,
   toOptions,
 } from './library';
 export type { ExerciseOption, ExerciseRowForOption } from './library';
