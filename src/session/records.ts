@@ -140,8 +140,14 @@ export function beatsRepMax(set: Attempt, best: PerformanceRepMax | null): boole
 
 /** Ce que les deux sortes de record ont en commun. */
 interface RecordLine {
-  /** La ligne de série qui porte le record, celle que la séance couronne. */
-  lineKey: string;
+  /**
+   * La clé de la série qui porte le record, celle que la séance couronne.
+   *
+   * C'est `line.key` (`p1`, `l{uuid}`, `d{rang}`), unique **dans son exercice
+   * seulement** : pas la clé composée de `lineKey()`. Une liste qui mêle
+   * plusieurs exercices se clé sur l'exercice, pas sur elle.
+   */
+  setKey: string;
   /** Le nom affiché de l'exercice, pour la carte de clôture. */
   name: string;
 }
@@ -261,7 +267,7 @@ export function sessionRecords(
     if (heaviest !== null && best !== null && outranks(heaviest.set, best)) {
       records.set(exercise.key, {
         metric: 'load',
-        lineKey: heaviest.key,
+        setKey: heaviest.key,
         name: exercise.name,
         // `comparable` a déjà écarté une série sans kilos.
         weightKg: heaviest.set.weightKg ?? 0,
@@ -272,7 +278,7 @@ export function sessionRecords(
     } else if (longest !== null && bestReps !== null && beatsRepMax(longest.set, bestReps)) {
       records.set(exercise.key, {
         metric: 'reps',
-        lineKey: longest.key,
+        setKey: longest.key,
         name: exercise.name,
         // `unloaded` a déjà écarté une série sans répétitions.
         reps: longest.set.reps ?? 0,

@@ -1622,7 +1622,7 @@ function ExerciseSection({
   // Au plus un par exercice : `sessionRecords` retient la meilleure série, pas
   // toutes celles qui dépassent l'ancienne marque.
   const record = records.get(exercise.key) ?? null;
-  const recordKey = record?.lineKey ?? null;
+  const recordKey = record?.setKey ?? null;
   // Bouclé : toutes les séries prévues sont faites (`wrapped.ts`). La suite ne
   // s'annonce que sous celui que la dernière série vient de boucler.
   const wrapped = isWrapped(exercise);

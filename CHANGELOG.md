@@ -30,6 +30,9 @@ la version taguée et s'en sert comme description de la GitHub Release. Un tag
 
 ### Corrigé
 
+- **Les records battus s'affichent tous à la clôture** : deux exercices qui
+  battaient leur record sur leur première série se partageaient le même
+  identifiant dans la carte, qui pouvait alors en doubler ou en perdre un.
 - **Décocher une série hors programme ne l'efface plus** : elle redevient à
   faire, au même rang et avec ses valeurs. Un appui à côté de la case ne fait
   plus perdre une série faite. Pour la retirer, on la décoche puis « − Série ».

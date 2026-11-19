@@ -95,7 +95,7 @@ function recordsOf(
   logged: LoggedExerciseRow = loggedRow(),
 ): string[] {
   const program = buildProgram([prescribedBlock(1, [prescribedExercise(1)])], [logged], sets);
-  const marked = new Set([...sessionRecords(program, history).values()].map((r) => r.lineKey));
+  const marked = new Set([...sessionRecords(program, history).values()].map((r) => r.setKey));
   const lines = program.blocks[0]?.groups[0]?.exercises[0]?.lines ?? [];
 
   return lines

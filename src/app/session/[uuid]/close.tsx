@@ -219,7 +219,7 @@ export default function SessionCloseScreen() {
 
         <Metrics summary={summary} startedAt={workout.startedAt} endedAt={workout.endedAt} />
 
-        <Records records={[...records.values()]} />
+        <Records records={[...records]} />
 
         <Muscles load={load} silhouette={silhouette} />
 
@@ -432,7 +432,7 @@ function Metrics({
  * Rien du tout quand il n'y en a pas. Une carte « 0 record » dirait un échec là
  * où il n'y a qu'une séance ordinaire.
  */
-function Records({ records }: { records: SessionRecord[] }) {
+function Records({ records }: { records: [string, SessionRecord][] }) {
   const styles = useStyles(sheets);
   const colors = useColors();
   if (records.length === 0) {
@@ -450,8 +450,11 @@ function Records({ records }: { records: SessionRecord[] }) {
         <Text style={styles.recordsCount}>{records.length}</Text>
       </View>
 
-      {records.map((record) => (
-        <RecordRow key={record.lineKey} record={record} />
+      {/* La clé de l'exercice, pas `record.setKey` : celle-ci n'est unique
+          qu'entre séries d'un même exercice (`p1` revient dans chacun), alors
+          que `sessionRecords` garantit au plus un record par exercice. */}
+      {records.map(([exerciseKey, record]) => (
+        <RecordRow key={exerciseKey} record={record} />
       ))}
     </View>
   );
