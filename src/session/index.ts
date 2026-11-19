@@ -107,10 +107,13 @@
  *     même transaction, comme tout ce qui doit atteindre le serveur.
  */
 
-export { buildBodyLoad, EMPTY_BODY_LOAD } from './areas';
-export type { AreaLoad, BodyLoad, ExerciseAreaBook } from './areas';
+export { buildBodyLoad, EMPTY_BODY_LOAD, tallyBodyLoad } from './areas';
+export type { AreaLoad, BodyLoad, ExerciseAreaBook, ExerciseSets } from './areas';
+export { buildWeekLoad, WEEK_DAYS, weekBounds } from './week';
+export type { WeekGlance, WeekSetRow } from './week';
 
 export {
+  abbrDate,
   DAY_REACH,
   dayOffset,
   dayTitle,
@@ -138,6 +141,7 @@ export {
   usePreferences,
   useRunningWorkout,
   useSessionHistory,
+  useWeekGlance,
   useSessionProgram,
   useSessionSetups,
   useToday,
@@ -290,6 +294,8 @@ export {
   runningWorkoutQuery,
   sessionLayoutQuery,
   toDayWorkout,
+  weekDoneCountQuery,
+  weekSetsQuery,
   workoutQuery,
   workoutsOfDayQuery,
   workoutStateLabel,

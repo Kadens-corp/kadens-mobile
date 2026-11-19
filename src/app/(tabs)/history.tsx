@@ -1,13 +1,19 @@
 import { router } from 'expo-router';
 import { ScrollView, Text, View } from 'react-native';
 
-import { Button, Card, Chip, EmptyState, Header } from '@/components';
+import { Button, Card, Chip, EmptyState, hasMuscleLoad, Header, MuscleMap } from '@/components';
 import {
+  abbrDate,
   feelingLabel,
   longDate,
+  targetAreaLabel,
   usePastWorkouts,
+  usePreferences,
+  useToday,
+  useWeekGlance,
   workoutStateLabel,
   type DayWorkout,
+  type WeekGlance,
 } from '@/session';
 import { space, text, themed, useStyles } from '@/theme';
 
@@ -27,10 +33,17 @@ import { space, text, themed, useStyles } from '@/theme';
  *
  * ## Ce qu'il n'est pas
  *
- * Un tableau de bord. Aucun total, aucune courbe, aucun cumul de tonnage : ces
- * lectures-là sont des pages web (KL-49, KL-50), elles supposent le serveur et
- * une vue d'ensemble qu'un téléphone en salle n'a pas à porter. Ici, une séance
- * = une ligne, et on l'ouvre pour relire ce qu'on y a fait.
+ * Un tableau de bord. Aucune courbe, aucun cumul de tonnage : ces lectures-là
+ * sont des pages web (KL-49, KL-50), elles supposent le serveur et une vue
+ * d'ensemble qu'un téléphone en salle n'a pas à porter. Ici, une séance = une
+ * ligne, et on l'ouvre pour relire ce qu'on y a fait.
+ *
+ * **Une exception, en tête (#131) : les sept derniers jours.** Le nombre de
+ * séances de muscu faites et les muscles travaillés, série par muscle, comme à
+ * la clôture d'une séance. C'est la seule question d'ensemble qu'on se pose
+ * entre deux séances (« qu'est-ce que je n'ai pas travaillé cette semaine ? »),
+ * elle tient dans la base locale (`week.ts`), et c'est le pendant de la carte
+ * de l'accueil web.
  *
  * ## Une séance close s'ouvre, elle ne se reprend pas
  *
@@ -42,6 +55,8 @@ import { space, text, themed, useStyles } from '@/theme';
 export default function HistoryScreen() {
   const styles = useStyles(sheets);
   const workouts = usePastWorkouts();
+  const today = useToday();
+  const week = useWeekGlance(today);
 
   return (
     <View style={styles.screen}>
@@ -50,6 +65,7 @@ export default function HistoryScreen() {
       <ScrollView contentContainerStyle={styles.page}>
         {workouts.length > 0 ? (
           <>
+            <WeekCard glance={week} />
             {workouts.map((workout) => (
               <PastCard key={workout.uuid} workout={workout} />
             ))}
@@ -67,6 +83,60 @@ export default function HistoryScreen() {
         )}
       </ScrollView>
     </View>
+  );
+}
+
+/**
+ * Les sept derniers jours (`week.ts`) : combien de séances de muscu, et les
+ * muscles travaillés avec leurs séries — la carte de clôture, sur la semaine.
+ *
+ * Toujours rendue au-dessus d'un historique non vide, même à zéro : une semaine
+ * sans séance est une réponse, pas une absence. Des séances faites sans une
+ * série consignée (cochées sur le web) comptent et ne peignent rien, et la carte
+ * le dit au lieu de montrer un corps gris sans explication.
+ */
+function WeekCard({ glance }: { glance: WeekGlance }) {
+  const styles = useStyles(sheets);
+  const { silhouette } = usePreferences();
+  const { sessions, load } = glance;
+
+  return (
+    <Card
+      title="7 derniers jours"
+      // Le titre de section (19) et la plage de dates en toutes lettres ne
+      // tenaient pas ensemble sur un téléphone : le titre se cassait mot par
+      // mot. Il descend au pas d'un libellé d'action, qui garde la famille, et
+      // les mois s'abrègent (« 29 oct. – 4 nov. »).
+      titleStyle={styles.weekTitle}
+      right={
+        <Text style={styles.weekRange}>
+          {abbrDate(glance.from)} – {abbrDate(glance.to)}
+        </Text>
+      }
+    >
+      <View style={styles.stack}>
+        <View
+          accessible
+          accessibilityLabel={`${sessions} séance${sessions > 1 ? 's' : ''} de muscu faite${sessions > 1 ? 's' : ''}`}
+          style={styles.count}
+        >
+          <Text style={styles.countValue}>{sessions}</Text>
+          <Text style={styles.countLabel}>
+            séance{sessions > 1 ? 's' : ''} de muscu faite{sessions > 1 ? 's' : ''}
+          </Text>
+        </View>
+
+        {hasMuscleLoad(load) ? (
+          <MuscleMap load={load} silhouette={silhouette} labelOf={targetAreaLabel} height={200} />
+        ) : (
+          <Text style={styles.caption}>
+            {sessions > 0
+              ? 'Aucune série consignée sur la période : les muscles se lisent sur le réalisé.'
+              : 'Rien de fait ces sept derniers jours.'}
+          </Text>
+        )}
+      </View>
+    </Card>
   );
 }
 
@@ -133,5 +203,10 @@ const sheets = themed((c) => ({
   marks: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space[3] },
   name: { ...text.name, color: c.text },
   caption: { ...text.caption, color: c.textSecondary },
+  weekTitle: { ...text.action, flexShrink: 0 },
+  weekRange: { ...text.caption, color: c.textSecondary, flexShrink: 1, textAlign: 'right' },
+  count: { flexDirection: 'row', alignItems: 'baseline', gap: space[4] },
+  countValue: { ...text.kpi, color: c.text },
+  countLabel: { ...text.body, color: c.textSecondary, flexShrink: 1 },
   reach: { ...text.caption, color: c.textSecondary, textAlign: 'center' },
 }));

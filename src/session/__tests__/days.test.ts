@@ -8,7 +8,7 @@
  * gardent.
  */
 
-import { dayTitle, dayWindow, VISIBLE_DAYS } from '@/session';
+import { abbrDate, dayTitle, dayWindow, VISIBLE_DAYS } from '@/session';
 
 const TODAY = '2026-11-15';
 
@@ -75,5 +75,15 @@ describe('dayTitle', () => {
   it('passe à la date au-delà d’une semaine', () => {
     expect(dayTitle('2026-11-22', TODAY)).toBe('22 novembre');
     expect(dayTitle('2026-11-08', TODAY)).toBe('8 novembre');
+  });
+});
+
+describe('abbrDate', () => {
+  it('abbreviates the long months and keeps the short ones whole', () => {
+    expect(abbrDate('2026-10-29')).toBe('29 oct.');
+    expect(abbrDate('2026-11-04')).toBe('4 nov.');
+    expect(abbrDate('2026-02-01')).toBe('1 févr.');
+    expect(abbrDate('2026-05-12')).toBe('12 mai');
+    expect(abbrDate('2026-08-15')).toBe('15 août');
   });
 });

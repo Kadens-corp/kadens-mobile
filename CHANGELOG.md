@@ -11,6 +11,13 @@ la version taguée et s'en sert comme description de la GitHub Release. Un tag
 
 ## [Non publié]
 
+### Ajouté
+
+- **Les sept derniers jours en haut de l'historique** : le nombre de séances de
+  muscu faites, et le corps avec les muscles travaillés et leurs séries, comme à
+  la clôture d'une séance. Tout se lit sur le téléphone, même hors réseau, et
+  une série cochée apparaît tout de suite sur le dessin.
+
 ### Corrigé
 
 - **La recherche d'exercices tolère le pluriel et les mots soudés** :

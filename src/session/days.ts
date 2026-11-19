@@ -57,6 +57,24 @@ const MONTHS = [
   'décembre',
 ];
 
+// Les abréviations d'usage (Imprimerie nationale) : on coupe après une
+// consonne et on garde le mot entier quand il est court. « mai », « juin »,
+// « août » et « mars » n'ont pas de point.
+const MONTHS_SHORT = [
+  'janv.',
+  'févr.',
+  'mars',
+  'avr.',
+  'mai',
+  'juin',
+  'juil.',
+  'août',
+  'sept.',
+  'oct.',
+  'nov.',
+  'déc.',
+];
+
 /** Un jour de la bande, tel que l'écran le peint. */
 export interface DayCell {
   /** `AAAA-MM-JJ`, la clé de lecture en base. */
@@ -171,4 +189,11 @@ export function shortDate(date: string): string {
   const at = parse(date);
 
   return `${at.getDate()} ${MONTHS[at.getMonth()]}`;
+}
+
+/** « 4 nov. ». Le mois abrégé, pour une marque qui partage sa ligne avec un titre. */
+export function abbrDate(date: string): string {
+  const at = parse(date);
+
+  return `${at.getDate()} ${MONTHS_SHORT[at.getMonth()]}`;
 }

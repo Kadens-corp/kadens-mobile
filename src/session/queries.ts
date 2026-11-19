@@ -148,6 +148,57 @@ export function loggedSetCountsAllQuery() {
 }
 
 /**
+ * Les séries consignées des sept derniers jours (`week.ts`), une ligne par
+ * série, avec l'exercice qui les porte.
+ *
+ * Une ligne par série et non un agrégat : le filtre « série mesurée »
+ * (`isMeasured`) est une règle du domaine, écrite une fois en TypeScript, et la
+ * fenêtre est bornée par sept jours de pratique. Le `from` est `logged_set` pour
+ * la raison de `loggedSetCountsQuery` : c'est la table qu'une série cochée fait
+ * grossir, donc celle dont le changement doit repeindre la carte.
+ */
+export function weekSetsQuery(from: string, to: string) {
+  return db
+    .select({
+      exerciseId: loggedExercise.exerciseId,
+      type: loggedSet.type,
+      reps: loggedSet.reps,
+      durationSeconds: loggedSet.durationSeconds,
+    })
+    .from(loggedSet)
+    .innerJoin(loggedExercise, eq(loggedSet.loggedExerciseId, loggedExercise.id))
+    .innerJoin(scheduledWorkout, eq(scheduledWorkout.uuid, loggedExercise.scheduledUuid))
+    .where(
+      and(
+        gte(scheduledWorkout.date, from),
+        lte(scheduledWorkout.date, to),
+        eq(loggedExercise.skipped, false),
+      ),
+    )
+    .orderBy(asc(scheduledWorkout.date), asc(loggedExercise.position), asc(loggedSet.position));
+}
+
+/**
+ * Combien de séances faites sur les sept derniers jours (`week.ts`).
+ *
+ * « Faite » comme dans `pastWorkoutsQuery`, moins le manqué : clôturée ici
+ * (`ended_at`), ou déclarée faite par le serveur. Écoute `scheduled_workout` :
+ * clôturer pose les deux, le compte monte sans que rien n'ait à prévenir l'écran.
+ */
+export function weekDoneCountQuery(from: string, to: string) {
+  return db
+    .select({ total: count() })
+    .from(scheduledWorkout)
+    .where(
+      and(
+        gte(scheduledWorkout.date, from),
+        lte(scheduledWorkout.date, to),
+        or(isNotNull(scheduledWorkout.endedAt), eq(scheduledWorkout.status, 'done')),
+      ),
+    );
+}
+
+/**
  * Combien de séances par jour, sur l'intervalle de la bande.
  *
  * Bornes incluses, et jamais de liste vide en paramètre : c'est ce qui permet de

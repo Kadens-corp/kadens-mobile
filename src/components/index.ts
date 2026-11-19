@@ -25,6 +25,7 @@ export { useKeyboardOverlap, type KeyboardOverlap } from './keyboard';
 export { formatNumber, NumberStepper, type NumberStepperProps } from './NumberStepper';
 export { Header, type HeaderProps } from './Header';
 export { OfflineBanner, type OfflineBannerProps } from './OfflineBanner';
+export { hasMuscleLoad, MuscleMap, type MuscleMapLoad, type MuscleMapProps } from './MuscleMap';
 export { MessageSheet, prefetchMessageMedia, type MessageSheetProps } from './MessageSheet';
 export { Sheet, type SheetProps } from './Sheet';
 export { UpdateBanner, type UpdateBannerProps } from './UpdateBanner';

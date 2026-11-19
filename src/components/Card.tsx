@@ -8,13 +8,19 @@
  */
 
 import type { ReactNode } from 'react';
-import { Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
 import { layout, space, text, themed, useStyles } from '@/theme';
 
 export type CardProps = {
   /** Titre de section : libellé de l'app, donc condensé capitales (règle 4). */
   title?: string;
+  /**
+   * Retouche du titre, pour un en-tête qui partage sa ligne avec une marque
+   * longue (une plage de dates) : un pas plus petit plutôt qu'un titre cassé
+   * mot par mot.
+   */
+  titleStyle?: StyleProp<TextStyle>;
   /** Action ou marque posée à droite du titre (bouton, chip). */
   right?: ReactNode;
   children?: ReactNode;
@@ -22,7 +28,7 @@ export type CardProps = {
   testID?: string;
 };
 
-export function Card({ title, right, children, style, testID }: CardProps) {
+export function Card({ title, titleStyle, right, children, style, testID }: CardProps) {
   const styles = useStyles(sheets);
   return (
     <View style={[styles.card, style]} testID={testID}>
@@ -31,7 +37,7 @@ export function Card({ title, right, children, style, testID }: CardProps) {
           {title ? (
             // `accessibilityRole="header"` donne à la carte un point d'entrée
             // dans la navigation par titres de TalkBack.
-            <Text accessibilityRole="header" style={styles.title}>
+            <Text accessibilityRole="header" style={[styles.title, titleStyle]}>
               {title}
             </Text>
           ) : (

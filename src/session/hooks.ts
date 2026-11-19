@@ -49,6 +49,7 @@ import {
   type SessionProgram,
 } from './program';
 import { elapsedSeconds } from './summary';
+import { buildWeekLoad, weekBounds, type WeekGlance } from './week';
 import {
   dayCountsQuery,
   exerciseAreasQuery,
@@ -71,6 +72,8 @@ import {
   sessionLayoutQuery,
   syncWindowQuery,
   toDayWorkout,
+  weekDoneCountQuery,
+  weekSetsQuery,
   workoutQuery,
   workoutsOfDayQuery,
   type DayWorkout,
@@ -305,6 +308,39 @@ export function useExerciseAreas(program: SessionProgram): ExerciseAreaBook {
   const { data } = useLiveQuery(exerciseAreasQuery(ids), [key]);
 
   return useMemo(() => new Map(data.map((row) => [row.id, row.targetAreas])), [data]);
+}
+
+/**
+ * Les sept derniers jours vus d'ici (`week.ts`) : séances faites et muscles
+ * travaillés, en lecture vive.
+ *
+ * `today` vient de `useToday()` chez l'appelant : la fenêtre glisse au retour au
+ * premier plan le lendemain, sans redémarrer l'app. Les zones se lisent comme
+ * pour la clôture, par la liste triée des exercices rencontrés, donc la lecture
+ * de la bibliothèque ne se remonte que si un nouvel exercice entre dans la
+ * fenêtre.
+ */
+export function useWeekGlance(today: string): WeekGlance {
+  const { from, to } = weekBounds(today);
+  const { data: rows } = useLiveQuery(weekSetsQuery(from, to), [from, to]);
+  const { data: done } = useLiveQuery(weekDoneCountQuery(from, to), [from, to]);
+
+  const ids = useMemo(
+    () =>
+      [
+        ...new Set(rows.map((row) => row.exerciseId).filter((id): id is number => id !== null)),
+      ].sort((left, right) => left - right),
+    [rows],
+  );
+  const key = ids.join(',');
+  const { data: areaRows } = useLiveQuery(exerciseAreasQuery(ids), [key]);
+  const areas = useMemo(
+    () => new Map(areaRows.map((row) => [row.id, row.targetAreas])),
+    [areaRows],
+  );
+  const load = useMemo(() => buildWeekLoad(rows, areas), [rows, areas]);
+
+  return { from, to, sessions: done[0]?.total ?? 0, load };
 }
 
 /** Ce que le sélecteur d'exercice affiche : sa liste, et les facettes qui la cadrent. */

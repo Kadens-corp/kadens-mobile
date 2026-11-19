@@ -90,6 +90,17 @@ export interface BodyLoad {
 export const EMPTY_BODY_LOAD: BodyLoad = { areas: [], attributed: 0, fullBody: 0, unmapped: 0 };
 
 /**
+ * Des séries de travail mesurées, rapportées à l'exercice qui les a portées.
+ *
+ * `exerciseId` nul : un exercice sans identité (sorti de la bibliothèque, saisi
+ * hors bibliothèque). Ses séries comptent en `unmapped`, jamais en zone.
+ */
+export interface ExerciseSets {
+  exerciseId: number | null;
+  sets: number;
+}
+
+/**
  * La charge par zone d'un déroulé.
  *
  * L'exercice **réalisé** prime sur le prescrit (`exerciseIdOf`) : un exercice
@@ -97,25 +108,39 @@ export const EMPTY_BODY_LOAD: BodyLoad = { areas: [], attributed: 0, fullBody: 0
  * prévu.
  */
 export function buildBodyLoad(program: SessionProgram, areas: ExerciseAreaBook): BodyLoad {
+  const entries: ExerciseSets[] = [];
+
+  for (const exercise of allExercises(program)) {
+    if (!exercise.skipped) {
+      entries.push({ exerciseId: exerciseIdOf(exercise), sets: workingSets(exercise.lines) });
+    }
+  }
+
+  return tallyBodyLoad(entries, areas);
+}
+
+/**
+ * La charge par zone de séries déjà comptées par exercice — le cœur commun de la
+ * carte d'une séance (`buildBodyLoad`) et de celle des sept derniers jours
+ * (`week.ts`). Les deux règles d'en-tête s'appliquent ici, et nulle part
+ * ailleurs.
+ *
+ * L'ordre des entrées départage deux zones à égalité de séries.
+ */
+export function tallyBodyLoad(entries: Iterable<ExerciseSets>, areas: ExerciseAreaBook): BodyLoad {
   // Une Map plutôt qu'un objet : elle garde l'ordre d'insertion, qui départage
-  // deux zones à égalité par leur ordre d'apparition dans la séance.
+  // deux zones à égalité par leur ordre d'apparition.
   const byArea = new Map<TargetArea, number>();
   let attributed = 0;
   let fullBody = 0;
   let unmapped = 0;
 
-  for (const exercise of allExercises(program)) {
-    if (exercise.skipped) {
+  for (const { exerciseId, sets } of entries) {
+    if (sets <= 0) {
       continue;
     }
 
-    const id = exerciseIdOf(exercise);
-    const targets = id === null ? undefined : areas.get(id);
-    const sets = workingSets(exercise.lines);
-
-    if (sets === 0) {
-      continue;
-    }
+    const targets = exerciseId === null ? undefined : areas.get(exerciseId);
 
     if (targets === undefined || targets.length === 0) {
       unmapped += sets;

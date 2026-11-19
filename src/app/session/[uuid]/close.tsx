@@ -4,8 +4,6 @@ import { Alert, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
-  BODY_FILLS,
-  BodyMap,
   Button,
   Chip,
   duration,
@@ -13,15 +11,16 @@ import {
   Field,
   Figure,
   gainLabel,
+  hasMuscleLoad,
   Header,
   Icon,
   isFeelingLevel,
+  MuscleMap,
   setEffort,
   useKeyboardOverlap,
   weight,
-  type BodyLevel,
 } from '@/components';
-import type { BodySilhouette, TargetArea } from '@/db';
+import type { BodySilhouette } from '@/db';
 import {
   buildBodyLoad,
   buildSessionSummary,
@@ -585,25 +584,10 @@ function Metric({
  */
 function Muscles({ load, silhouette }: { load: BodyLoad; silhouette: BodySilhouette }) {
   const styles = useStyles(sheets);
-  // Les teintes du dessin, pas des pastilles à part : une légende dont les
-  // couleurs ne seraient pas exactement celles de la carte ne serait pas une
-  // légende. L'échelle s'inverse de nuit, les deux suivent ensemble.
-  const fills = useStyles(BODY_FILLS);
-  const levels = useMemo(
-    () => new Map<TargetArea, BodyLevel>(load.areas.map((area) => [area.area, area.level])),
-    [load],
-  );
 
-  if (load.areas.length === 0 && load.fullBody === 0 && load.unmapped === 0) {
+  if (!hasMuscleLoad(load)) {
     return null;
   }
-
-  const aside = [
-    load.fullBody > 0 ? `${sets(load.fullBody)} corps entier` : null,
-    load.unmapped > 0 ? `${sets(load.unmapped)} sans zone déclarée` : null,
-  ]
-    .filter((part) => part !== null)
-    .join(' · ');
 
   return (
     <View style={styles.section}>
@@ -612,33 +596,9 @@ function Muscles({ load, silhouette }: { load: BodyLoad; silhouette: BodySilhoue
       </Text>
       <Text style={styles.caption}>D’après les séries de travail consignées.</Text>
 
-      <BodyMap levels={levels} silhouette={silhouette} />
-
-      {load.areas.map((area) => (
-        <View
-          key={area.area}
-          accessible
-          accessibilityLabel={`${targetAreaLabel(area.area)} : ${sets(area.sets)}, ${area.percent} %`}
-          style={styles.areaRow}
-        >
-          <View style={[styles.areaDot, { backgroundColor: fills[area.level] }]} />
-          <Text style={styles.name} numberOfLines={1}>
-            {targetAreaLabel(area.area)}
-          </Text>
-          <View style={styles.spacer} />
-          <Text style={styles.areaValue}>{area.sets}</Text>
-          <Text style={styles.areaShare}>{Math.round(area.percent)} %</Text>
-        </View>
-      ))}
-
-      {aside.length > 0 ? <Text style={styles.caption}>+ {aside}</Text> : null}
+      <MuscleMap load={load} silhouette={silhouette} labelOf={targetAreaLabel} />
     </View>
   );
-}
-
-/** « 1 série », « 4 séries ». Le pluriel se pose une fois. */
-function sets(count: number): string {
-  return `${count} série${count > 1 ? 's' : ''}`;
 }
 
 /** Les six états de `LogDeviation`, mot pour mot ceux du serveur. */
@@ -823,20 +783,6 @@ const sheets = themed((c) => ({
   rating: { flexDirection: 'row', alignItems: 'center', gap: space[5] },
   ratingRows: { flexShrink: 1, gap: space[2] },
   ratingValue: { ...text.bodyStrong, color: c.text },
-
-  // Une ligne de légende de la carte musculaire. La pastille reprend la teinte du
-  // dessin ; elle est bordée, sinon le palier le plus clair s'effacerait sur le
-  // papier — et elle ne porte aucune information que la ligne n'écrive déjà.
-  areaRow: { flexDirection: 'row', alignItems: 'center', gap: space[4] },
-  areaDot: {
-    width: space[5],
-    height: space[5],
-    borderWidth: layout.hairline,
-    borderColor: c.borderStrong,
-  },
-  areaValue: { ...text.numeric, color: c.text },
-  // Une part se lit en second : c'est le rang qui compte, pas le pourcent exact.
-  areaShare: { ...text.numeric, color: c.textSecondary, minWidth: 44, textAlign: 'right' },
 
   // Un filet gauche, pas un fond : l'écart se signale sans introduire de teinte,
   // et l'identité n'a qu'une couleur — elle est prise (règle 2).
