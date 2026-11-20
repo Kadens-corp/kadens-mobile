@@ -115,6 +115,7 @@ export function scheduledWorkout(
     feeling: null,
     sessionRpe: null,
     plan: null,
+    planInstruction: null,
     blocks: [prescribedBlock(1, [prescribedExercise(1)])],
     log: null,
     ...overrides,

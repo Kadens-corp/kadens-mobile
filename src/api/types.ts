@@ -183,6 +183,12 @@ export interface ScheduledWorkoutPayload {
   feeling?: number | null;
   sessionRpe?: number | null;
   plan: PlanRef | null;
+  /**
+   * La consigne de la case du plan (#128), texte brut. `null` hors plan, case
+   * retirée ou note vide, jamais `""`. **Additif** comme le ressenti : un serveur
+   * antérieur ne l'envoie pas, et une clé absente ne dit rien.
+   */
+  planInstruction?: string | null;
   blocks: PrescribedBlock[];
   /** `null` tant que rien n'a été consigné. */
   log: LoggedExercisePayload[] | null;

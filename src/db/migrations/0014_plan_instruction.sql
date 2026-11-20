@@ -1,0 +1,1 @@
+ALTER TABLE `scheduled_workout` ADD `plan_instruction` text;

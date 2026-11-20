@@ -312,6 +312,9 @@ export default function SessionScreen() {
   const [openExercise, setOpenExercise] = useState<string | null>(null);
   const [openSetup, setOpenSetup] = useState<string | null>(null);
   const [openViewer, setOpenViewer] = useState<string | null>(null);
+  // La consigne de case (#128) n'a qu'un texte par séance : un booléen suffit,
+  // il n'y a pas d'objet à figer.
+  const [instructionOpen, setInstructionOpen] = useState(false);
   const [picker, setPicker] = useState<PickerTarget | null>(null);
   // Le mode « ranger le déroulé » (KL-52). Il vit dans l'écran et nulle part
   // ailleurs : ce n'est pas un état de la séance, c'est une façon de la regarder,
@@ -665,6 +668,12 @@ export default function SessionScreen() {
   const sheetExercise = openExercise === null ? null : findExercise(program, openExercise);
   const setupExercise = openSetup === null ? null : findExercise(program, openSetup);
   const viewerExercise = openViewer === null ? null : findExercise(program, openViewer);
+  // La consigne de la case du plan (#128). Elle se lit en tête de page tant que
+  // la séance n'est pas ouverte, puis passe dans la bande fixe une fois qu'elle
+  // l'est : c'est pendant les séries qu'on en a besoin, et la page défile alors
+  // jusqu'à la série courante, loin de sa tête.
+  const instruction = workout.planInstruction;
+  const instructionInBand = instruction !== null && running;
 
   return (
     <View style={styles.screen}>
@@ -698,9 +707,25 @@ export default function SessionScreen() {
           ne porte plus que ce qui n'est pas déjà en tête, et disparaît quand il
           ne lui reste rien — un liseré vide sous l'en-tête n'est pas une bande,
           c'est une marge. */}
-      {workout.plan || program.total > 0 ? (
+      {workout.plan || program.total > 0 || instructionInBand ? (
         <View style={styles.summary}>
           {workout.plan ? <Text style={styles.caption}>{workout.plan.title}</Text> : null}
+          {/* Une ligne, pas le texte entier : la place de la bande se paie en
+              séries visibles. L'appui ouvre la consigne complète. */}
+          {instructionInBand ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Consigne du plan : ${instruction}`}
+              accessibilityHint="Lire la consigne en entier"
+              onPress={() => setInstructionOpen(true)}
+              style={styles.instructionRow}
+            >
+              <Text style={styles.instructionLabel}>Consigne</Text>
+              <Text style={styles.instructionLine} numberOfLines={1}>
+                {instruction}
+              </Text>
+            </Pressable>
+          ) : null}
           {/* Rien à mesurer sur une séance sans programme : « 0 / 0 » n'est pas une
               progression, c'est une case vide de plus. */}
           {program.total > 0 ? <Progress done={program.done} total={program.total} /> : null}
@@ -758,6 +783,16 @@ export default function SessionScreen() {
                 <Text style={styles.body}>
                   Cette séance n’est pas commencée. Rien ne se consigne tant qu’elle ne l’est pas.
                 </Text>
+              </View>
+            ) : null}
+
+            {/* Avant de commencer (et à la relecture), la consigne se lit en
+              entier, avant le programme : c'est là qu'on prépare sa séance. Une
+              fois la séance ouverte, elle est dans la bande (`instructionInBand`). */}
+            {instruction !== null && !instructionInBand ? (
+              <View style={styles.notice}>
+                <Text style={styles.instructionLabel}>Consigne du plan</Text>
+                <Text style={styles.instructionText}>{instruction}</Text>
               </View>
             ) : null}
 
@@ -978,6 +1013,12 @@ export default function SessionScreen() {
           images={imagesOf(images, viewerExercise)}
           onClose={() => setOpenViewer(null)}
         />
+      ) : null}
+
+      {instructionOpen && instruction !== null ? (
+        <Sheet visible onClose={() => setInstructionOpen(false)} title="Consigne du plan">
+          <Text style={styles.instructionText}>{instruction}</Text>
+        </Sheet>
       ) : null}
 
       {setupExercise ? (
@@ -3627,6 +3668,19 @@ const sheets = themed((c) => ({
   },
   setupLabel: { ...text.eyebrow, color: c.textSecondary },
   setupText: { ...text.caption, color: c.text },
+
+  // La consigne de case (#128) : le même couple que les réglages, un libellé
+  // structurel en capitales puis le texte saisi en casse normale. Sans filet :
+  // elle vient du programme, pas de l'athlète.
+  instructionLabel: { ...text.eyebrow, color: c.textSecondary },
+  instructionText: { ...text.body, color: c.text },
+  instructionLine: { ...text.caption, color: c.text, flex: 1 },
+  instructionRow: {
+    minHeight: layout.touchTarget,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[4],
+  },
 
   summary: {
     gap: space[2],
