@@ -87,6 +87,22 @@ const ICONS = {
       d: 'M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294zM5 21h14',
     },
   ],
+  /** Voir le mouvement d'un exercice illustré : le même œil que la séance web. */
+  eye: [
+    {
+      d: 'M2.062 12.348a1 1 0 0 1 0-.696a10.75 10.75 0 0 1 19.876 0a1 1 0 0 1 0 .696a10.75 10.75 0 0 1-19.876 0',
+    },
+    { cx: 12, cy: 12, r: 3 },
+  ],
+  /** Relancer le fondu des images d'un exercice. */
+  play: [
+    { d: 'M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z' },
+  ],
+  /** Mettre le fondu en pause, sur l'image affichée. */
+  pause: [
+    { x: 14, y: 3, width: 5, height: 18, rx: 1 },
+    { x: 5, y: 3, width: 5, height: 18, rx: 1 },
+  ],
 } as const satisfies Record<string, readonly Shape[]>;
 
 export type IconName = keyof typeof ICONS;

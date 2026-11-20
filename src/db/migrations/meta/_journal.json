@@ -92,6 +92,13 @@
       "when": 1794667900709,
       "tag": "0012_history_rep_record",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1795183393686,
+      "tag": "0013_exercise_images",
+      "breakpoints": true
     }
   ]
 }

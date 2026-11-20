@@ -13,6 +13,13 @@ la version taguée et s'en sert comme description de la GitHub Release. Un tag
 
 ### Ajouté
 
+- **Voir l'exercice** : quand un exercice a des images (le début et la fin du
+  mouvement, posées sur le site), elles se jouent en fondu enchaîné dans une
+  feuille. Pendant la séance, le bouton « Ajuster » devient « Plus » et propose
+  « Voir l'exercice » en tête ; avant de commencer ou après la clôture, un
+  bouton « Voir » l'ouvre directement. Pause et étapes à la main, et rien ne
+  démarre seul avec « Supprimer les animations ». Les images se mettent en
+  cache à l'ouverture de la séance : elles se voient ensuite sans réseau.
 - **Les sept derniers jours en haut de l'historique** : le nombre de séances de
   muscu faites, et le corps avec les muscles travaillés et leurs séries, comme à
   la clôture d'une séance. Tout se lit sur le téléphone, même hors réseau, et

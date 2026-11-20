@@ -432,6 +432,21 @@ export function exerciseAreasQuery(exerciseIds: number[]) {
 }
 
 /**
+ * Les images du mouvement des exercices que la séance référence : ce que
+ * « Voir l'exercice » joue, et ce que l'écran met en cache disque à l'ouverture
+ * pour la salle sans réseau.
+ *
+ * Écoute `exercise` : un pull qui ajoute ou retire une image l'apporte à la
+ * séance ouverte sans que rien n'ait à prévenir l'écran.
+ */
+export function exerciseImagesQuery(exerciseIds: number[]) {
+  return db
+    .select({ id: exercise.id, images: exercise.images })
+    .from(exercise)
+    .where(inArray(exercise.id, exerciseIds.length > 0 ? exerciseIds : [NO_EXERCISE]));
+}
+
+/**
  * La fenêtre de séances datées du dernier pull : jusqu'où la bande de jours peut
  * glisser (`dayWindow`).
  *

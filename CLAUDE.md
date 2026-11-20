@@ -155,6 +155,15 @@ doesn't animate GIFs on this build) with a disk cache warmed ahead of time; `__m
 importable under Jest. Mutation payloads are therefore `{ uuid }`, `{ exerciseId }` or `{ messageId }`; code that
 only cares about workouts reads `payload.uuid` and skips `undefined`.
 
+`exercise.images` holds the **movement images** of an exercise (a start and an end frame, uploaded on the web, spec
+in `kadens/docs/feature-exercise-images.md`): signed URLs **without expiry**, because the library only comes back
+on a delta when an exercise changes — an expiring URL would die on the phone with no pull to replace it. The
+server revokes them by dropping the file from the exercise. Loaded without the token through `expo-image`, like
+the message GIF, and prefetched to disk when a workout screen opens (`prefetchExerciseImages`), so "Voir
+l'exercice" works in a basement gym. `ExerciseFrames` plays them as a cross-fade where each frame fades in **over**
+the previous one; it keeps **one `Animated.Value` per frame, each on a view mounted once** — a single value moved
+from view to view stays bound to the unmounted one under the native driver.
+
 There's no "modified locally" flag on `scheduledWorkout` — that fact is already carried by `mutationQueue` (a
 pending workout has a row there). This is why push-before-pull is non-negotiable (see below): two sources for the
 same fact would eventually disagree.

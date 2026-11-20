@@ -123,6 +123,12 @@ export interface ExercisePayload {
   activity: ActivityType;
   targetAreas: TargetArea[];
   mediaUrl: string | null;
+  /**
+   * Les images du mouvement, dans l'ordre de lecture : URL absolues et signées,
+   * sans expiration, à charger sans jeton. Absent d'un serveur antérieur : lu
+   * comme `[]`.
+   */
+  images?: string[];
   /** `true` = bibliothèque globale de l'app, en lecture seule ici. */
   global: boolean;
   updatedAt: string | null;

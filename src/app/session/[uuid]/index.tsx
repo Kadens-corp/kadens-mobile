@@ -18,12 +18,14 @@ import {
   Chip,
   duration,
   EmptyState,
+  ExerciseFrames,
   Field,
   FilterChip,
   gainLabel,
   Header,
   Icon,
   NumberStepper,
+  prefetchExerciseImages,
   setEffort,
   setEffortParts,
   Sheet,
@@ -89,6 +91,7 @@ import {
   useSessionHistory,
   useSessionProgram,
   useSessionSetups,
+  useSessionImages,
   useToday,
   useWorkout,
   useWorkoutPendingSync,
@@ -284,6 +287,15 @@ export default function SessionScreen() {
   // Les réglages de machine, lus comme l'historique : une lecture pour tout le
   // déroulé, indexée par exercice.
   const setups = useSessionSetups(program);
+  // Les images du mouvement des exercices illustrés, lues de même. Mises en
+  // cache disque dès l'ouverture, tant qu'il y a du réseau : « Voir l'exercice »
+  // doit marcher au sous-sol de la salle.
+  const images = useSessionImages(program);
+  const imageUrls = [...images.values()].flat().join('\n');
+  useEffect(
+    () => prefetchExerciseImages(imageUrls === '' ? [] : imageUrls.split('\n')),
+    [imageUrls],
+  );
   // La série qui bat le record de son exercice, s'il y en a une. Calculé une
   // fois pour tout le déroulé, comme l'historique dont il dérive — et mémoïsé
   // comme lui : il se refait à chaque écriture, pas à chaque rendu.
@@ -299,6 +311,7 @@ export default function SessionScreen() {
   const [openSet, setOpenSet] = useState<string | null>(null);
   const [openExercise, setOpenExercise] = useState<string | null>(null);
   const [openSetup, setOpenSetup] = useState<string | null>(null);
+  const [openViewer, setOpenViewer] = useState<string | null>(null);
   const [picker, setPicker] = useState<PickerTarget | null>(null);
   // Le mode « ranger le déroulé » (KL-52). Il vit dans l'écran et nulle part
   // ailleurs : ce n'est pas un état de la séance, c'est une façon de la regarder,
@@ -651,6 +664,7 @@ export default function SessionScreen() {
   const sheetSet = openSet === null ? null : findLine(program, openSet);
   const sheetExercise = openExercise === null ? null : findExercise(program, openExercise);
   const setupExercise = openSetup === null ? null : findExercise(program, openSetup);
+  const viewerExercise = openViewer === null ? null : findExercise(program, openViewer);
 
   return (
     <View style={styles.screen}>
@@ -771,6 +785,7 @@ export default function SessionScreen() {
                   editable={running}
                   history={history}
                   setups={setups}
+                  images={images}
                   records={records}
                   ahead={ahead}
                   today={today}
@@ -783,6 +798,7 @@ export default function SessionScreen() {
                   onDropSet={onDropSet}
                   onOpenExercise={setOpenExercise}
                   onOpenSetup={setOpenSetup}
+                  onViewExercise={setOpenViewer}
                 />
               ))}
 
@@ -814,6 +830,7 @@ export default function SessionScreen() {
                     editable={running}
                     history={history}
                     setups={setups}
+                    images={images}
                     records={records}
                     ahead={ahead}
                     today={today}
@@ -826,6 +843,7 @@ export default function SessionScreen() {
                     onDropSet={onDropSet}
                     onOpenExercise={setOpenExercise}
                     onOpenSetup={setOpenSetup}
+                    onViewExercise={setOpenViewer}
                   />
                 ))}
               </View>
@@ -941,11 +959,24 @@ export default function SessionScreen() {
           scheduledUuid={uuid}
           exercise={sheetExercise}
           setup={setupOf(setups, sheetExercise)}
+          illustrated={imagesOf(images, sheetExercise).length > 0}
+          onView={(key) => {
+            setOpenExercise(null);
+            setOpenViewer(key);
+          }}
           onClose={() => setOpenExercise(null)}
           onReplace={(key) => {
             setOpenExercise(null);
             setPicker({ mode: 'replace', exerciseKey: key });
           }}
+        />
+      ) : null}
+
+      {viewerExercise ? (
+        <ExerciseViewerSheet
+          exercise={viewerExercise}
+          images={imagesOf(images, viewerExercise)}
+          onClose={() => setOpenViewer(null)}
         />
       ) : null}
 
@@ -1354,6 +1385,8 @@ type SectionHandlers = {
   history: Map<number, ExerciseHistoryRow>;
   /** Les réglages de machine, indexés par identifiant d'exercice, descendus comme l'historique. */
   setups: Map<number, string>;
+  /** Les images du mouvement, par identifiant d'exercice ; seuls les exercices illustrés y sont. */
+  images: Map<number, string[]>;
   /**
    * Les records battus dans cette séance : clé d'exercice → le record, série qui
    * le porte et marque battue comprises (`sessionRecords`). Descendue avec
@@ -1382,6 +1415,8 @@ type SectionHandlers = {
   onOpenExercise: (key: string) => void;
   /** Ouvre la feuille des réglages de machine. Prend la clé de l'exercice. */
   onOpenSetup: (key: string) => void;
+  /** Ouvre la feuille du mouvement (ses images en fondu). Prend la clé de l'exercice. */
+  onViewExercise: (key: string) => void;
 };
 
 /**
@@ -1600,6 +1635,7 @@ function ExerciseSection({
   editable,
   history,
   setups,
+  images,
   records,
   ahead,
   today,
@@ -1612,6 +1648,7 @@ function ExerciseSection({
   onDropSet,
   onOpenExercise,
   onOpenSetup,
+  onViewExercise,
 }: { exercise: SessionExercise } & SectionHandlers) {
   const styles = useStyles(sheets);
   const { prescribed, lines } = exercise;
@@ -1619,6 +1656,7 @@ function ExerciseSection({
   const exerciseId = exerciseIdOf(exercise);
   const past = exerciseId === null ? null : (history.get(exerciseId) ?? null);
   const setup = exerciseId === null ? null : (setups.get(exerciseId) ?? null);
+  const illustrated = exerciseId !== null && images.has(exerciseId);
   // Au plus un par exercice : `sessionRecords` retient la meilleure série, pas
   // toutes celles qui dépassent l'ancienne marque.
   const record = records.get(exercise.key) ?? null;
@@ -1681,13 +1719,28 @@ function ExerciseSection({
             </Text>
           </>
         ) : null}
+        {/* « Plus » : tout ce qu'on fait d'un exercice en séance, dont le voir
+            bouger quand il est illustré. Hors séance en cours, il n'y a rien à
+            consigner : seul « Voir » reste, s'il y a quelque chose à voir. */}
         {editable ? (
           <Button
-            label="Ajuster"
+            label="Plus"
             variant="ghost"
             size="sm"
-            accessibilityHint={`Sauter, remplacer, annoter ou noter les réglages de ${exercise.name}`}
+            accessibilityHint={
+              illustrated
+                ? `Voir le mouvement, sauter, remplacer, annoter ou noter les réglages de ${exercise.name}`
+                : `Sauter, remplacer, annoter ou noter les réglages de ${exercise.name}`
+            }
             onPress={() => onOpenExercise(exercise.key)}
+          />
+        ) : illustrated ? (
+          <Button
+            label="Voir"
+            variant="ghost"
+            size="sm"
+            accessibilityHint={`Voir le mouvement de ${exercise.name}`}
+            onPress={() => onViewExercise(exercise.key)}
           />
         ) : null}
       </View>
@@ -2970,12 +3023,17 @@ function ExerciseSheet({
   scheduledUuid,
   exercise,
   setup,
+  illustrated,
+  onView,
   onClose,
   onReplace,
 }: {
   scheduledUuid: string;
   exercise: SessionExercise;
   setup: string | null;
+  /** L'exercice a des images : la feuille propose de le voir bouger. */
+  illustrated: boolean;
+  onView: (key: string) => void;
   onClose: () => void;
   onReplace: (key: string) => void;
 }) {
@@ -3001,7 +3059,7 @@ function ExerciseSheet({
     <Sheet
       visible
       onClose={onClose}
-      title="Ajuster l’exercice"
+      title="Plus"
       footer={
         <Button
           label="Valider"
@@ -3014,6 +3072,22 @@ function ExerciseSheet({
       }
     >
       <Text style={styles.name}>{exercise.name}</Text>
+
+      {/* En tête : c'est la seule entrée qui ne consigne rien, et celle qu'on
+          vient chercher quand on ne sait plus comment se fait le mouvement. Ce
+          qui a été saisi est enregistré avant de partir, comme pour Remplacer. */}
+      {illustrated ? (
+        <Button
+          label="Voir l’exercice"
+          variant="secondary"
+          block
+          accessibilityHint="Ses images, jouées en boucle"
+          onPress={() => {
+            apply();
+            onView(exercise.key);
+          }}
+        />
+      ) : null}
 
       <Button
         label={skipped ? 'Ne plus sauter' : 'Sauter cet exercice'}
@@ -3094,6 +3168,31 @@ function ExerciseSheet({
 }
 
 /**
+ * Le mouvement d'un exercice : ses images, jouées en fondu enchaîné
+ * (`ExerciseFrames`). Ouverte par « Voir l'exercice » de la feuille « Plus »
+ * pendant la séance, ou par « Voir » avant de la commencer et après l'avoir
+ * close. Elle ne consigne rien.
+ */
+function ExerciseViewerSheet({
+  exercise,
+  images,
+  onClose,
+}: {
+  exercise: SessionExercise;
+  images: string[];
+  onClose: () => void;
+}) {
+  const styles = useStyles(sheets);
+
+  return (
+    <Sheet visible onClose={onClose} title="L’exercice" testID="exercise-viewer">
+      <Text style={styles.name}>{exercise.name}</Text>
+      <ExerciseFrames images={images} name={exercise.name} />
+    </Sheet>
+  );
+}
+
+/**
  * Les réglages de machine, seuls : la feuille qu'ouvre un appui sur ceux qui
  * s'affichent sous le nom de l'exercice.
  *
@@ -3163,6 +3262,12 @@ function SetupField({ value, onChange }: { value: string; onChange: (next: strin
 const SETUP_MAX_LENGTH = 2000;
 
 /** Le réglage de l'exercice que porte cette ligne de séance, s'il en a un. */
+function imagesOf(images: Map<number, string[]>, exercise: SessionExercise): string[] {
+  const exerciseId = exerciseIdOf(exercise);
+
+  return exerciseId === null ? [] : (images.get(exerciseId) ?? []);
+}
+
 function setupOf(setups: Map<number, string>, exercise: SessionExercise): string | null {
   const exerciseId = exerciseIdOf(exercise);
 

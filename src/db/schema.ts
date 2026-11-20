@@ -103,6 +103,17 @@ export const exercise = sqliteTable('exercise', {
     .notNull()
     .default(sql`'[]'`),
   mediaUrl: text('media_url'),
+  /**
+   * Les images qui montrent le mouvement, dans l'ordre où elles se jouent
+   * (typiquement le début, puis la fin). Des URL **signées et sans date** : elles
+   * se chargent sans jeton, par `expo-image`, et restent valables tant que
+   * l'exercice cite l'image. Toujours un tableau, `[]` sans image ni serveur
+   * assez récent pour en envoyer.
+   */
+  images: text('images', { mode: 'json' })
+    .$type<string[]>()
+    .notNull()
+    .default(sql`'[]'`),
   /** `true` = exercice de l'app. Le téléphone ne modifie rien, il distingue à l'affichage. */
   global: integer('is_global', { mode: 'boolean' }).notNull().default(false),
   /** La valeur même sur laquelle porte le delta : ce qu'on relit est ce que le serveur a comparé. */

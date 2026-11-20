@@ -1,0 +1,1 @@
+ALTER TABLE `exercise` ADD `images` text DEFAULT '[]' NOT NULL;

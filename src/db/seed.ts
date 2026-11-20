@@ -348,6 +348,7 @@ export function seedDemo(): void {
           activity: e.activity,
           targetAreas: [...e.targetAreas],
           mediaUrl: null,
+          images: [],
           global: e.global,
           updatedAt: nowIso(),
         })),

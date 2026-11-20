@@ -89,6 +89,35 @@ describe('la bibliothèque', () => {
     expect((await getSyncState())?.exerciseLanguage).toBe('en');
   });
 
+  it('garde les images du mouvement, et les remplace quand le serveur les change', () => {
+    const url = (file: string) =>
+      `https://kadens.test/media/exercise/101/${file.repeat(32)}.jpg?_hash=x`;
+    seedBootstrap({
+      exercises: [exercisePayload(101, { images: [url('a'), url('b')] }), exercisePayload(102)],
+    });
+
+    const imagesOf = (id: number) =>
+      db
+        .select({ id: exercise.id, images: exercise.images })
+        .from(exercise)
+        .all()
+        .find((row) => row.id === id)?.images;
+
+    // L'ordre de la liste est l'ordre de lecture : il se garde tel quel.
+    expect(imagesOf(101)).toEqual([url('a'), url('b')]);
+    // Un serveur qui n'envoie pas encore la clé : pas d'image, jamais `null`.
+    expect(imagesOf(102)).toEqual([]);
+
+    applyBootstrap(
+      bootstrapPayload({
+        since: '2026-08-04T09:00:00Z',
+        exercises: [exercisePayload(101, { images: [url('b')] })],
+      }),
+    );
+
+    expect(imagesOf(101)).toEqual([url('b')]);
+  });
+
   it('oublie les exercices que le serveur déclare disparus', () => {
     seedBootstrap({ exercises: [exercisePayload(101), exercisePayload(102)] });
 

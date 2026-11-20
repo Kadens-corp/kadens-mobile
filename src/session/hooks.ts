@@ -55,6 +55,7 @@ import {
   exerciseAreasQuery,
   exerciseHistoryQuery,
   exerciseSetupsQuery,
+  exerciseImagesQuery,
   exerciseLanguageQuery,
   exerciseLibraryQuery,
   exerciseNamesQuery,
@@ -291,6 +292,22 @@ export function useSessionSetups(program: SessionProgram): Map<number, string> {
   const { data } = useLiveQuery(exerciseSetupsQuery(ids), [key]);
 
   return useMemo(() => new Map(data.map((row) => [row.exerciseId, row.text])), [data]);
+}
+
+/**
+ * Les images du mouvement des exercices du déroulé, indexées par identifiant
+ * d'exercice — seuls ceux qui en ont figurent. Même clé de dépendance que
+ * `useSessionSetups` : la lecture ne se remonte pas à chaque série cochée.
+ */
+export function useSessionImages(program: SessionProgram): Map<number, string[]> {
+  const ids = useMemo(() => exerciseIdsOf(program), [program]);
+  const key = ids.join(',');
+  const { data } = useLiveQuery(exerciseImagesQuery(ids), [key]);
+
+  return useMemo(
+    () => new Map(data.filter((row) => row.images.length > 0).map((row) => [row.id, row.images])),
+    [data],
+  );
 }
 
 /**

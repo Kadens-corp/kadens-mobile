@@ -14,6 +14,7 @@ export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from '.
 export { Card, type CardProps } from './Card';
 export { Chip, type ChipProps, type ChipRank, type ChipTone } from './Chip';
 export { EmptyState, type EmptyStateProps } from './EmptyState';
+export { ExerciseFrames, prefetchExerciseImages, type ExerciseFramesProps } from './ExerciseFrames';
 export { Fault, type FaultProps } from './Fault';
 export { Field, type FieldProps } from './Field';
 export { EffortSelector, type EffortSelectorProps } from './EffortSelector';
